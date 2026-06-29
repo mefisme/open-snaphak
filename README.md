@@ -71,6 +71,31 @@ overlay tree.) Launch DOOM, enter the SnapMap editor; the "SnapHak Studio" windo
 console if it doesn't). DOOM keeps using the real `XInput1_3.dll` in System32 for controller input — the
 backend forwards every XInput export through to it.
 
+## Versioning & releases
+
+Versions follow **semantic versioning** — `vMAJOR.MINOR.PATCH` (e.g. `v0.1.0`). **The git tag is the version**;
+there is no `VERSION` file to maintain. One tag = one release containing **both** the mod bundle and
+`snaphak.exe`, both stamped with that tag.
+
+Cut a release (maintainer):
+
+```
+git tag v0.1.0
+git push origin v0.1.0      # fires .github/workflows/release.yml
+```
+
+CI builds the DLLs + the installer (stamping `snaphak.exe` via `-ldflags -X main.version=v0.1.0`), packages the
+overlay, and publishes a GitHub Release with `snaphak-bundle.zip` + `snaphak.exe` + `install.ps1`.
+
+- **`snaphak version`** prints the installer's version (and the installed mod version, if any).
+- **`snaphak update`** pulls the latest release; **`snaphak status`** shows what's installed.
+- A local/dev build reports `dev` (unstamped) or `local` (a `--local` install) — never a release number.
+
+**Surviving DOOM updates (planned):** the clone resolves engine functions by *signature*, so many DOOM patches
+need no rebuild at all. When a patch shifts things enough to require one, an **auto-re-patcher** CI job
+(re-resolve signatures against the new DOOM build → rebuild → if green, publish a compatible release) is the
+intended automation. Stubbed for now (see `release.yml`).
+
 ## Contributing
 
 Contributions are welcome.

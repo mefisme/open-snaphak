@@ -188,6 +188,14 @@ func cmdStatus(f flags) error {
 	return nil
 }
 
+// cmdVersion prints the installer's own version and, if a mod is installed, the installed mod version.
+func cmdVersion() {
+	fmt.Println("snaphak", version)
+	if rec, err := loadRecord(); err == nil {
+		fmt.Printf("installed mod: %s  (in %s)\n", rec.Version, rec.DoomPath)
+	}
+}
+
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {

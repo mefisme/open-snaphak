@@ -55,7 +55,7 @@ func main() {
 	case "status":
 		err = cmdStatus(f)
 	case "version", "--version", "-v":
-		fmt.Println("snaphak", version)
+		cmdVersion()
 	case "help", "-h", "--help":
 		usage()
 	default:

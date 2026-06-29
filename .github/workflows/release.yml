@@ -55,3 +55,9 @@ jobs:
             dist/snaphak.exe
             installer/install.ps1
           generate_release_notes: true
+
+# --- Auto-re-patcher (PLANNED, not built -- the portability endgame) ---
+# A future job that, on a NEW DOOM build, re-resolves the engine signatures (src/backend/signatures.c) against
+# the new binary, rebuilds, runs the in-DLL self-proof, and -- if green -- publishes a compatible release
+# automatically. Because the clone resolves engine functions by SIGNATURE (not hardcoded RVAs), many DOOM
+# patches need no rebuild at all; this job handles the ones that do. v1 ships this as a documented stub only.
