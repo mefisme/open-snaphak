@@ -100,13 +100,13 @@
 #include "sh_timeline.h"
 #include "sh_controller.h"
 #include "snaphak_iface.h"
-#include "sh_event_catalog.h"   /* GENERATED (tools/gen_event_catalog.py): the engine event-def catalog that
+#include "sh_event_catalog.h"   /* GENERATED data table: the engine event-def catalog that
                                  * drives the event-picker dropdown -- the OG builds it live from the engine
                                  * eventMgr; we embed the source-of-record dump (dumpevent.txt). */
-#include "sh_entity_asset_lists.h"  /* GENERATED (tools/gen_entity_asset_lists.py): per-entity-class asset value
+#include "sh_entity_asset_lists.h"  /* GENERATED data table: per-entity-class asset value
                                  * lists (render-model names, anim-web paths), keyed by the entity's inherit slug.
                                  * Feeds the EXCEED-the-OG modelIndex/animWebPath dropdowns (the OG type-ins these). */
-#include "sh_event_docs.h"      /* GENERATED (tools/gen_event_docs.py from tools/timeline_event_docs.json): OUR
+#include "sh_event_docs.h"      /* GENERATED data table: OUR
                                  * author-facing descriptions for the 1611 events (the engine ships none). Feeds the
                                  * EXPLAIN description box -- the rich "what this event does" + per-arg prose. */
 #include "mkcmd_template.inc"   /* SH_MKCMD_PREFAB_TEMPLATE: the BYTE-EXACT, engine-accepted idSnapEntityPrefab
@@ -355,7 +355,7 @@ static void tl_connect_dirty(ShTimelineEditor *ed, QWidget *root)
  * The arg-type-name reduction (idDecl* -> lowercased resource class) mirrors FUN_18000994c. */
 
 /* Non-"idDecl" pointer arg-types whose decl-type short-name is NOT the mechanical strip-"id" (verified vs the
- * source-of-record reference/snaphak_info/alldecls/ dirs): idSoundShader* is the "sound" decl-type, NOT
+ * source-of-record entity decls): idSoundShader* is the "sound" decl-type, NOT
  * "soundshader". idActorModifier* and idMaterial* DO reduce mechanically but are listed for explicitness. The rest
  * of the catalog's id<X>* (idMD6Anim*, idEventReceiver*, …) are assets/objects, NOT decls -> no entry -> they
  * stay editable enum boxes. RE: timeline-decl-resclass-re (the OG +0x100 path; FUN_18000994c is

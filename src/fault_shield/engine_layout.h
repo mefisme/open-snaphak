@@ -48,7 +48,7 @@
  * NON-SIG-ABLE DATA GLOBAL (a .data object, no unique code fingerprint) -> recipe-tagged base+RVA literal.
  * SAME re-derive recipe lives on the backend's copy (backend/iface_engine.c EDITOR_SINGLETON_RVA).
  * RE-DERIVE per build: it is the inline idSnapEditorLocal singleton, IN-PLACE-CONSTRUCTED by its ctor at
- * 0x51A8E0 -- decompile that ctor (decompile_rva.py 0x51A8E0); its `this` (the rcx the ctor writes its
+ * 0x51A8E0 -- decompile that ctor at 0x51A8E0; its `this` (the rcx the ctor writes its
  * vtable + fields through) IS this object's address; RVA = that - module_base. (RVA derived from the live
  * editor singleton; see the re-derive recipe above.) */
 #define RVA_EDITOR_SINGLETON  0x3056748u  /* idSnapEditorLocal object = doomBase + this (NOT a pointer; in-place ctor 0x51A8E0) */

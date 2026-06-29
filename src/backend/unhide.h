@@ -6,7 +6,7 @@
  * RE-HIDE clears it (sparing `idInfoPath`, which the engine keeps visible). The only engine CALL is
  * GetDeclsOfType (signature-resolved by the signature resolver); the flag flips are pure memory writes.
  *
- * Clean-room: ported from our own RE of the OG XINPUT1_3 unhide + the live-validated JS reimpl
+ * Clean-room: ported from our own RE of the OG XINPUT1_3 unhide + our live-validated reimplementation
  * (the reference implementation doUnhide). Zero OG SnapHak bytes.
  */
 #ifndef BACKEND_B1_UNHIDE_H

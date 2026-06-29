@@ -11,7 +11,7 @@
  * The stores are PURE + offline-testable (no engine state). The op handlers reach the editor (selection
  * read/write, hovered id, toast, class/inherit read) through the BACKEND-owned interface vtable (the
  * engine-touch slots iface_engine.c fills) -- so the DECISION (store mutation, toast text) lives here
- * and the engine touch is behind the vtable, exactly the the reference implementation split.
+ * and the engine touch is behind the vtable, exactly the reference implementation's split.
  *
  * Clean-room: ported from our own RE + the reference implementation. Zero OG SnapHak bytes.
  */

@@ -3,7 +3,7 @@
  * Detours idSnapMap::DeserializeFromJson(const char* json, idSnapMap* out) [variant A, buffer-first].
  * When armed, our detour reads the file-backed rawmap source into a heap buffer and calls the engine
  * ORIGINAL (via the trampoline) with OUR buffer as arg0 -- the native equivalent of OG's "overwrite
- * param_1" and the JS reimpl's "args[0] = _rawmapBuf". The engine's own deserialize then parses our
+ * param_1" and our reference reimplementation's "args[0] = _rawmapBuf". The engine's own deserialize then parses our
  * bytes. When the gate is off / no source / a read fails, we pass the engine's json through untouched
  * (OG's bVar2==false fallback). We free our buffer after the call.
  *
@@ -262,7 +262,7 @@ unsigned long sh_rawmap_swap_count(void)
 #include "backend_log.h"
 
 /* SerializeToJson prologue steal window. Decoded from the live engine prologue (DOOM RVA 0x5F2390,
- * ratified 2026-06-20 via tools/re against the unpacked exe):
+ * ratified 2026-06-20 against the unpacked exe):
  *   40 53            push rbx                      (2)
  *   56               push rsi                      (1)
  *   57               push rdi                      (1)

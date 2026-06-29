@@ -736,7 +736,7 @@ static void h_sh_genbmodel(idCmdArgs *a)
  *     name = *(char**)(m + RW_MODEL_NAME_OFF)` -> read the two `call qword[rax+0xNN]` vtbl offsets + the
  *     `mov rcx,[model+0xNN]` name offset straight off the decompile.
  *   - ED_SHOWCURSOR_OFF: decompile the OG `showcursor` handler -> `*(uint8*)(editor + 0xNN) = 0`; the editor base
- *     is EDITOR_SINGLETON_RVA below (already recipe-tagged). recipe: tools/re/run.ps1 decompile_fn.py <handlerRVA>.
+ *     is EDITOR_SINGLETON_RVA below (already recipe-tagged). Re-derive by decompiling the handler (<handlerRVA>) on the new build.
  * A wrong offset here degrades to a bad read on dev-only console cmds (SEH-guarded), never a crash. */
 #define RW_VSLOT_MODEL_COUNT      0x188       /* renderWorld vtbl -> GetActiveRenderModelCount() -> uint (BUILD-SPECIFIC) */
 #define RW_VSLOT_GET_MODEL        0x190       /* renderWorld vtbl -> GetRenderModel(idx) -> model* (=400; BUILD-SPECIFIC) */
@@ -964,7 +964,7 @@ static void h_sh_dispatch(idCmdArgs *a)
  *
  * BUILD-PORTABILITY (the reference-entity-layout trap): the declMgr-accessor RVA + the declMgr-vtbl +0x90
  * and evMgr-vtbl +0x28/+0x20/+0x10 SLOTS + the rec+0x10 fspec offset are this-build event-manager layout
- * -- RE-DERIVE PER BUILD (recipe: tools/re/disasm.py on the declMgr ctor FUN_1417f6c70's two vtables
+ * -- RE-DERIVE PER BUILD (disassemble the declMgr ctor FUN_1417f6c70's two vtables
  * PTR_FUN_14270b958 / PTR_FUN_14270c2c8). Every hop is SEH-guarded + non-null gated; a wrong slot degrades
  * to "event manager unavailable" / a clean per-event skip, never a crash (same discipline as sh_type). */
 #define SS_EVMGR_ACCESSOR_VSLOT   0x90    /* declMgr vtbl -> evMgr sub-object accessor (BUILD-SPECIFIC) */

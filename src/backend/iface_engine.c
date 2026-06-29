@@ -40,7 +40,7 @@
  * recipe-tagged base+RVA literal. The fault-shield carries the SAME object + the SAME recipe
  * (fault_shield/engine_layout.h RVA_EDITOR_SINGLETON). RE-DERIVE per build: it is the inline
  * idSnapEditorLocal singleton, IN-PLACE-CONSTRUCTED by its ctor at 0x51A8E0 -- decompile that ctor
- * (decompile_rva.py -Program <DOOM> -ScriptArgs @('0x51A8E0')); its `this` (the rcx it writes the vtable +
+ * (decompile RVA 0x51A8E0 on the new build); its `this` (the rcx it writes the vtable +
  * fields through) IS this object's address; RVA = that - module_base. (RVA derived from the live
  * editor singleton; see the re-derive recipe above.) */
 #define EDITOR_SINGLETON_RVA   0x3056748u   /* inline idSnapEditorLocal object = module_base + this (in-place ctor 0x51A8E0; re-derive per-build) */
@@ -103,7 +103,7 @@
 /* RemoveFromSelection (Delete, +0x130) -- engine 0x59fda0. Resolved by FALLBACK RVA off g_doom_base (a
  * jumptable-dispatch leaf the byte-sig scanner cannot reliably anchor); tagged for per-build re-derive
  * exactly like the editor singleton. RE-DERIVE: the engine call inside OG XINPUT1_3 FUN_1800073c0
- * (decompile_rva.py -Program XINPUT1_3.dll -ScriptArgs @('0x73c0')) -> `(DAT_18003e120 + 0x59fda0)`. */
+ * (decompile RVA 0x73c0 on the new build) -> `(DAT_18003e120 + 0x59fda0)`. */
 #define REMOVE_FROM_SEL_RVA     0x59fda0u
 
 /* idStr::operator=(const char*) -- engine 0x19fd5f0. The displayName field (entity+0x170) is a FULL idStr
@@ -114,7 +114,7 @@
  * the read (len@+0x178 / data@+0x180) kept seeing the old empty string -> the box never updated (the
  * 2026-06-27 "displayname doesn't save" bug). className/inherit (defsub+0x60/+0x58) ARE idPoolStr, so they
  * correctly stay on 0x1a03e10. Fallback RVA off module_base (re-derive: OG XINPUT1_3 FUN_1800072a0 [the +0x128
- * slot] -> `(DAT_18003e120 + 0x19fd5f0)(entity+0x170, data)`; `decompile_rva.py 0x19fd5f0` shows the
+ * slot] -> `(DAT_18003e120 + 0x19fd5f0)(entity+0x170, data)`; decompiling 0x19fd5f0 shows the
  * len/data/realloc idStr::operator= body, distinct from 0x1a03e10's pool-ptr write). */
 #define IDSTR_OPASSIGN_RVA      0x19fd5f0u
 

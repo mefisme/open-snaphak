@@ -459,11 +459,11 @@ static long sh_c_atoi(const char *s)
 }
 static double sh_c_atof(const char *s) { return s ? atof(s) : 0.0; }   /* atof = leading-token, else 0.0 */
 
-/* --- renderEngineFloat: the ENGINE-FORMAT float token (the reference implementation pyFloatRepr + the C-exponent strip;
- * matches rawmap_codec._format_float = Python repr with C-style exponents). MUST keep `.0` on whole floats
- * (2.0 not 2) + switch to scientific at exp<-4 or exp>=16, like Python repr. We build it from the shortest
- * round-trip digits printf gives (%.17g over-prints; we trim to the shortest that round-trips, then format
- * exactly as Python repr does -- the same algorithm the reference implementation reproduces from toExponential). --- */
+/* --- renderEngineFloat: the ENGINE-FORMAT float token. The engine's text form is the shortest
+ * round-trip decimal: keep `.0` on whole floats (2.0 not 2) + switch to scientific notation at
+ * exp < -4 or exp >= 16. We build it from the shortest round-trip digits printf gives (%.17g
+ * over-prints; we trim to the shortest that round-trips), then format exactly to that rule -- the
+ * shortest round-trip repr with C-style exponents. --- */
 static std::string sh_shortest_digits(double f, int &out_exp, bool &out_neg)
 {
     /* find the shortest %.Ne that round-trips to f, then split mantissa digits + decimal exponent E. */
@@ -496,7 +496,7 @@ static std::string render_engine_float(double f)
     std::string digits = sh_shortest_digits(f, E, neg);   /* digits has no point; E = decimal exponent */
     std::string body;
     if (E < -4 || E >= 16) {
-        /* SCIENTIFIC (Python repr threshold): mant = d[.ddd], exponent Python e+NN / e-NN (>=2 digits). */
+        /* SCIENTIFIC (the exp<-4 / exp>=16 threshold): mant = d[.ddd], exponent e+NN / e-NN (>=2 digits). */
         std::string mant = (digits.size() > 1) ? (digits.substr(0, 1) + "." + digits.substr(1)) : digits;
         int ae = E < 0 ? -E : E;
         char ebuf[16];

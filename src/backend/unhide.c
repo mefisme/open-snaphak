@@ -1,6 +1,6 @@
 /* unhide.c -- see unhide.h. Native C port of OG FUN_180021EE0 (the `sh_target_any` unhide).
  *
- * MECHANISM (DIRECT, the live JS reimpl the reference implementation doUnhide):
+ * MECHANISM (DIRECT, our live-validated reimplementation doUnhide):
  *   list  = GetDeclsOfType("idDeclSnapEditorEntity")   // engine fn; returns the typed decl-manager node
  *   array = *(list + 0x20)                              // decl-pointer array  (LIST_ARRAY_OFF)
  *   count = *(uint*)(list + 0x28)                       // decl count          (LIST_COUNT_OFF)
@@ -26,7 +26,7 @@
  * NO FREE: OG's literal port frees `array` after the walk; but on THIS build +0x20 is the live-owned
  * registry array (proven by FUN_141801300 above), so freeing it would corrupt the decl registry. We
  * therefore intentionally do NOT free -- this is a deliberate, build-verified divergence from a literal
- * OG port, matching the JS reimpl (which also never frees). See the report's RISKS.
+ * OG port, matching our reference reimplementation (which also never frees). See the report's RISKS.
  *
  * THREAD/TIMING: GetDeclsOfType is an engine call -> must run on the DOOM main thread context in OG (it
  * is invoked from the `sh_target_any` console command = a main-thread Cbuf callback). Our bootstrap runs

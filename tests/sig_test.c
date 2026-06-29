@@ -3,7 +3,7 @@
  * Builds an in-memory IMAGE laid out by RVA from a PE file on disk (each section's raw bytes copied to
  * image[VirtualAddress], exactly how the Windows loader maps it), then runs sig_resolve_all over it --
  * so this exercises the SAME code path the live DLL takes (mapped-image section walk), against the real
- * unpacked DOOM, with no game running. Confirms the C port matches the Python resolver's verdict
+ * unpacked DOOM, with no game running. Confirms the C port matches the reference resolver's verdict
  * (25/25 unique, RVAs == known_rva). NOT shipped in the DLL -- a build-time check.
  *
  *   cl /nologo /O2 /MT sig_test.c signatures.c /Fe:sig_test.exe

@@ -49,7 +49,7 @@ typedef struct sig_result {
     uint32_t    rva;    /* recovered RVA, or 0 */
 } sig_result;
 
-/* The shipped engine signature database (port of signatures.py ENGINE_SIGNATURES). NULL-terminated
+/* The shipped engine signature database. NULL-terminated
  * (the final entry has name==NULL). */
 extern const sig_entry BACKEND_ENGINE_SIGNATURES[];
 

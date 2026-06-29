@@ -6,7 +6,7 @@
  * as C-struct/enum text and copies it to the clipboard.
  *
  * Engine deps (resolved/cached by sh_typeinfo_install):
- *   - the decl-type/reflection manager, reached the SAME way the bss apply already does (loader.py
+ *   - the decl-type/reflection manager, reached the SAME way the bss apply already does (the
  *     DECL_MGR_ACCESSOR_RVA / the reference implementation _declMgrAccessor): call the accessor at the HARDCODED RVA
  *     0x17F7030 off g_doom_base -> declMgr, then reflect = (*(*declMgr + 0x80))(declMgr) (vtable slot
  *     +0x80). The accessor is NOT signature-able -- it is a real lazy-init singleton accessor whose fixed

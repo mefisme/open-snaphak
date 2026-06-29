@@ -97,8 +97,8 @@ unsigned long sh_rawmap_swap_count(void);
  * file op that fails simply skips the shadow write; the real save (the engine original's fill of `out`)
  * has already happened, so a shadow failure NEVER blocks or corrupts the real save.
  *
- * Clean-room: ported from our own RE (the truth above + the OG decompile) + the proven JS reimpl. Zero
- * OG SnapHak bytes.
+ * Clean-room: ported from our own RE (the truth above + the OG decompile) + the proven reference
+ * reimplementation. Zero OG SnapHak bytes.
  */
 /* Install the SAVE-shadow detour on the engine's SerializeToJson.
  *   `serialize_fn`        = the resolved engine fn address (resolver name "SerializeToJson"). 0 =>

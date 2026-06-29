@@ -31,7 +31,7 @@ typedef void    (*setstate_t)(void *editor, int state);   /* SetState 0x5298A0 (
 typedef int64_t (*frame_t)(void *self);                   /* idCommonLocal::Frame 0x17ce360 */
 static frame_t orig_frame = NULL;
 
-/* 5 pushes + `mov eax,0x119c0` => boundary 0x17ce36f, all position-independent (disasm.py verified). */
+/* 5 pushes + `mov eax,0x119c0` => boundary 0x17ce36f, all position-independent (disassembly-verified). */
 #define FRAME_STOLEN 15
 #define RECOVER_BUDGET_FRAMES 600   /* ~10s @ 60fps backstop */
 

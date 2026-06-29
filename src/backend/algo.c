@@ -378,7 +378,7 @@ float sh_algo_curveeval(const void *c, float t, uint8_t mode)
 
 /* ------------------------------------------------------------------- the cs_dontuse toggle ------- */
 
-/* The 4 sig NAMES (must match signatures.c / signatures.py exactly). */
+/* The 4 sig NAMES (must match signatures.c exactly). */
 #define ALGO_SIG_MATMUL  "AlgoMatMul"
 #define ALGO_SIG_INVERSE "AlgoInverse"
 #define ALGO_SIG_PACK    "AlgoPackRGBA"
