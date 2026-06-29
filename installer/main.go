@@ -38,8 +38,9 @@ Uninstall restores any files it replaced and leaves your %USERPROFILE%\snaphak d
 
 func main() {
 	if len(os.Args) < 2 {
-		usage()
-		os.Exit(2)
+		// no args = a double-click -> the friendly interactive install (auto-detect, confirm, pause)
+		interactiveInstall()
+		return
 	}
 	cmd := os.Args[1]
 	f := parseFlags(os.Args[2:])

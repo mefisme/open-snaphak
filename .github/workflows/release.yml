@@ -50,6 +50,10 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          # A tag with a '-' (e.g. v0.3.0-beta.1) is a BETA pre-release: GitHub excludes it from "latest", so
+          # `snaphak update` (end users) never gets it; beta testers opt in via `snaphak install --release <tag>`.
+          # A plain tag (v0.3.0) is the stable release end users update to.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             snaphak-bundle.zip
             dist/snaphak.exe

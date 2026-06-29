@@ -27,14 +27,11 @@ research; the third-party runtime it links against (Qt, the DOOM engine) is not 
 
 ## Quick start (players)
 
-You do **not** need to build anything. Get the installer from the latest release and run:
+You do **not** need to build anything. Get `snaphak.exe` from the latest release and **double-click it** — it
+auto-detects your DOOM install via Steam, asks you to confirm, and installs. (From a terminal: `snaphak install`.)
 
-```
-snaphak install
-```
-
-It auto-detects your DOOM install via Steam, deploys the overlay, and backs up anything it replaces. Then:
-`snaphak update`, `snaphak status`, and `snaphak uninstall` (which restores DOOM to vanilla and leaves your
+`snaphak.exe` installs itself to `%LOCALAPPDATA%\open-snaphak\`. Run it again any time for `snaphak update`,
+`snaphak status`, `snaphak version`, and `snaphak uninstall` (which restores DOOM to vanilla and leaves your
 `%USERPROFILE%\snaphak` data untouched). See [`installer/README.md`](installer/README.md).
 
 > Releases are produced by CI. Until the first release is published, build from source (below).
@@ -86,6 +83,14 @@ git push origin v0.1.0      # fires .github/workflows/release.yml
 
 CI builds the DLLs + the installer (stamping `snaphak.exe` via `-ldflags -X main.version=v0.1.0`), packages the
 overlay, and publishes a GitHub Release with `snaphak-bundle.zip` + `snaphak.exe` + `install.ps1`.
+
+**Release channels** (set by the *tag*, not a branch):
+- **Stable** — a plain tag `v0.3.0`. This is what end users' `snaphak update` gets.
+- **Beta** — a pre-release tag `v0.3.0-beta.1` (any tag with a `-`; CI auto-marks it a GitHub pre-release). It's
+  excluded from "latest", so end users never receive it. Beta testers opt in:
+  `snaphak install --release v0.3.0-beta.1`.
+
+Pin any version explicitly with `--release <tag>` on `install` or `update`.
 
 - **`snaphak version`** prints the installer's version (and the installed mod version, if any).
 - **`snaphak update`** pulls the latest release; **`snaphak status`** shows what's installed.

@@ -37,8 +37,15 @@ With no `--local`, `install`/`update` download the latest release bundle from Gi
   the dirs it created **only if they're empty** — a pre-existing `plugins/` or other content is left intact. Your
   `%USERPROFILE%\snaphak` data (overrides / prefabs / rawmaps) is **never** touched.
 
-## Releases
+## Releases & channels
 
-`install` / `update` download from **`snaphak/open-snaphak`** releases. The release URLs go live once the first
-GitHub Release is published (CI cuts one on a `v*` tag); until then, use `--local <dist>` to install from a local
-`package.ps1` build.
+`install` / `update` download from **`snaphak/open-snaphak`** releases. `snaphak.exe` installs itself to
+`%LOCALAPPDATA%\open-snaphak\` (with its `install.json` record); **double-clicking it** runs an interactive
+install (auto-detect DOOM → confirm → install).
+
+- **Stable** (`snaphak update`): the latest plain `vX.Y.Z` release.
+- **Beta**: a `vX.Y.Z-beta.N` pre-release — opt in with `snaphak install --release vX.Y.Z-beta.N`.
+- Pin any version with `--release <tag>` on install/update.
+
+(The release path goes live once the first GitHub Release is published; until then, use `--local <dist>` to
+install from a local `package.ps1` build.)
