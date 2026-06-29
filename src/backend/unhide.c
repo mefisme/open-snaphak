@@ -104,7 +104,7 @@ sh_unhide_result sh_unhide_apply(void *get_decls_of_type, int show)
     r.count = count;
     if (array == NULL || count == 0) { r.ok = 1; return r; }   /* empty registry -> clean no-op */
 
-    /* Sanity cap: the snapEditorEntityDef registry is ~1361 decls (reference/.../snapeditorentitydef/);
+    /* Sanity cap: the snapEditorEntityDef registry is ~1361 decls;
      * a count wildly larger than that means we read a stale/garbage manager node -> bail rather than
      * stride a bogus array. 1<<20 is generous headroom and well under any address-space confusion. */
     if (count > (1u << 20)) { r.error = "decl count implausible (stale manager node?)"; return r; }

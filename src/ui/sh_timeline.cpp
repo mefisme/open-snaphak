@@ -372,7 +372,7 @@ static const char *tl_decl_alias(const std::string &typeName)
     return NULL;
 }
 
-/* Reduce an arg-type-name to the decl-type SHORT-NAME = the reference/.../alldecls/<declType>/ dir name (the
+/* Reduce an arg-type-name to the decl-type SHORT-NAME = the engine's <declType> decl-type short-name (the
  * engine declManager key AND the nested-commit inner-key). idDecl<X>* -> strip "idDecl" + lowercase + drop '*'
  * ("idDeclProjectile*" -> "projectile"). A non-"idDecl" decl-pointer takes the explicit alias (tl_decl_alias).
  * NB: this is NOT the engine GetDeclsOfType resource-class (that registry is asset-types + LOGS on a decl

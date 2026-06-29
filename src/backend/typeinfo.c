@@ -58,7 +58,7 @@ typedef void *(*find_enum_fn)(void *reflect, const char *name);
  *   field+0x00 = varType (the PRIMARY type string -- OG `pcVar13 = *puVar5`, always the 1st %s)
  *   field+0x08 = varOps  (the pointer/array qualifier -- the strstr("*") target, OG `puVar5[1]`)
  *   field+0x10 = varName (OG `puVar5[2]`, also the loop terminator)
- * matching reference/idlib_schema.json idTypeInfoTools field-metadata (..,varType,varOps,varName,..).
+ * matching the engine's idlib schema idTypeInfoTools field-metadata (..,varType,varOps,varName,..).
  * cs_fieldinfo never touches +0x00/+0x08 -- it only needs name/offset/size. */
 #define REC_FIELDS_OFF      0x20    /* type record -> field array base (CONFIRMED LIVE) */
 #define REC_SUPER_OFF       0x08    /* type record -> superclass name char* (sh_type; OG-only) */

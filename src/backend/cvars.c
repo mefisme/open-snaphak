@@ -128,7 +128,7 @@ static int verify_one(int i)
     }
 }
 
-/* idCVar.valueInteger offset (DIRECT, cvar_value_offset.txt): reference/idlib_schema.json idCVar puts
+/* idCVar.valueInteger offset (DIRECT, from the engine's idlib field schema): idCVar puts
  * valueInteger (and BOOL) at +0x30, cross-confirmed by the OG DAT_18003d2b8==(embedded idCVar)+0x30
  * arithmetic. Our self == &g_cvar_objs[i][0] (no descriptor wrapper), so value == *(int*)(block+0x30). */
 #define IDCVAR_VALUE_INT_OFF 0x30

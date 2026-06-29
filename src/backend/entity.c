@@ -46,7 +46,7 @@ typedef int   (*map_writer_fn)(void *map, const char *path);
 #define VSLOT_FIND_ENTITY    0x498
 #define VSLOT_GET_ORIGIN     0x340
 
-/* sh_dumpdef resolved-def-text chain (DIRECT, source-of-record reference/idlib_schema.json):
+/* sh_dumpdef resolved-def-text chain (DIRECT, the engine's source-of-record idlib schema):
  *   idEntity.entityDef @ +0x6D0 -> idDeclEntityDef.entityStateWithInheritanceText(idStr) @ +0x130 ->
  *   idStr.data @ +0x10  ==>  ent+0x6d0 then +0x140 (0x130+0x10) = the def-text char*.
  * 2021 offsets MATCH the live schema byte-for-byte, but build-sensitive -> SEH-guarded + non-null. */

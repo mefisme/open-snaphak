@@ -538,13 +538,13 @@ const sig_entry BACKEND_ENGINE_SIGNATURES[] = {
                                * 12-byte window (stub + 6 CC) is file-wide UNIQUE (1 match @0xd99dc0). The hook
                                * reads ZERO renderer internals (the engine passes a fully-formatted fmt+varargs)
                                * and does NOT trampoline (the original sink was a no-op). Verified vs
-                               * binaries/DOOMx64vk.exe.unpacked.exe. */
+                               * an unpacked DOOM image. */
       "4C 89 4C 24 20 C3 CC CC CC CC CC CC",
       0xD99DC0u },
     /* --- snaphak_algo override targets (cs_dontuse; clone of the 4 OG XINPUT1_3 detours over the
      * engine math fns). cs_dontuse FULL-replaces each engine fn with our f64 reimpl (matmul/inverse/
      * curveEval) or bit-exact color-pack; OG hooks do NOT chain, so neither do ours. Each sig is
-     * file-wide UNIQUE @ the named RVA, verified vs binaries/DOOMx64vk.exe.unpacked.exe (resolver
+     * file-wide UNIQUE @ the named RVA, verified vs an unpacked DOOM image (resolver
      * hits==1, rva==known_rva). See algo.c. */
     { "AlgoMatMul",        /* engine 0x1a82f10 void f(const float*A rcx[16], const float*B rdx[16],
                             * float*out r8[16]) -- 4x4*4x4 row-major out=A*B (out[r*4+c]=sum_k A[r*4+k]*
@@ -587,7 +587,7 @@ const sig_entry BACKEND_ENGINE_SIGNATURES[] = {
      * (FUN_18000b560 / FUN_18000b4a0 / FUN_18001ffe0). The clone resolves each by SIGNATURE off the live
      * DOOM module (b2 handlers' resolve_sig_by_name over g_module_base) -- NO hardcoded base+RVA. Author
      * recipe (file-image, capstone): dump <rva> <len> + scan the minimal-unique <pattern> against
-     * binaries/DOOMx64vk.exe.unpacked.exe (image base 0x140000000). Each pattern below is file-wide UNIQUE
+     * an unpacked DOOM image (image base 0x140000000). Each pattern below is file-wide UNIQUE
      * (scan HITS==1 @ the named RVA); masked bytes are the RIP-rel disp32s + rel32 call operands (build-
      * volatile). re-derive on a build bump: re-run the minimal-unique scan, confirm 1 hit. --- */
     { "Md6Ctor",           /* [20] md6 model-compiler context ctor (engine 0x149b8d0). idMd6Builder::ctor:

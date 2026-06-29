@@ -5,7 +5,7 @@
  * is FIRST looked up as a same-named file under %USERPROFILE%\snaphak\overrides\ (or
  * overrides\shader_includes\ for shader includes); if present, the engine is served that file's bytes
  * from disk instead of the packaged resource. This is how SnapHak ships its 29 snapeditorentitydef /
- * editor-settings / property-inspector overrides (reference/overrides/) that expand the editor palette.
+ * editor-settings / property-inspector overrides that expand the editor palette.
  *
  * MECHANISM (DIRECT, RE of OG XINPUT1_3.dll 2021-03-27 + live DOOM):
  *   The engine's resource-provider class has a C++ vtable at `engineBase + 0x27984a0` (DOOM
