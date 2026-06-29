@@ -13,7 +13,7 @@
  * ops: snapHak_rawmaps_on/off -> sh_rawmap_swap_arm; sh_target_any -> sh_unhide_apply. Later tranches
  * fill the decl/entity/type handlers.
  *
- * ABI (DIRECT, evidence/b2-decompiles/{engine_0x1aa3630.txt,xreg_0x229b1.txt,cvar_spine_flush_disasm.txt}):
+ * ABI (DIRECT, from the engine command-register decompiles):
  *   AddCommand(cmdsys, name, handler, help, argComp, flags)   -- we pass argComp=NULL, flags=0.
  *   handler is __fastcall(idCmdArgs*); argc @ +0x00, argv[N] @ +0x08 + 8*N.
  *   console output goes through idCommon dispatch (Printf sig 0x1A08E80) via the OG wrapper form

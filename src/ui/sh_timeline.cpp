@@ -102,7 +102,7 @@
 #include "snaphak_iface.h"
 #include "sh_event_catalog.h"   /* GENERATED data table: the engine event-def catalog that
                                  * drives the event-picker dropdown -- the OG builds it live from the engine
-                                 * eventMgr; we embed the source-of-record dump (dumpevent.txt). */
+                                 * eventMgr; we embed the engine's source-of-record event dump. */
 #include "sh_entity_asset_lists.h"  /* GENERATED data table: per-entity-class asset value
                                  * lists (render-model names, anim-web paths), keyed by the entity's inherit slug.
                                  * Feeds the EXCEED-the-OG modelIndex/animWebPath dropdowns (the OG type-ins these). */
@@ -359,7 +359,7 @@ static void tl_connect_dirty(ShTimelineEditor *ed, QWidget *root)
  * "soundshader". idActorModifier* and idMaterial* DO reduce mechanically but are listed for explicitness. The rest
  * of the catalog's id<X>* (idMD6Anim*, idEventReceiver*, …) are assets/objects, NOT decls -> no entry -> they
  * stay editable enum boxes. RE: timeline-decl-resclass-re (the OG +0x100 path; FUN_18000994c is
- * idDecl*-only and PREPENDS "idDecl"; the inner-key is the alldecls dir name, not a mechanical reduction). */
+ * idDecl*-only and PREPENDS "idDecl"; the inner-key is the engine's decl-type dir name, not a mechanical reduction). */
 static const char *tl_decl_alias(const std::string &typeName)
 {
     static const struct { const char *type; const char *declType; } TL[] = {

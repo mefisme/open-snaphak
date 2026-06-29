@@ -54,7 +54,7 @@ typedef void *(*find_enum_fn)(void *reflect, const char *name);
  * offset @ +0x18, size @ +0x1c, varType @ +0x00, varOps @ +0x08, comment @ +0x28.
  *
  * The CLASS-branch per-field render reads THREE strings (re-derived against OG FUN_180021090's field
- * loop, cmd_0x21090.txt L240-253 + the two fmt literals @0x374e0/0x37518):
+ * loop, its decompile L240-253 + the two fmt literals @0x374e0/0x37518):
  *   field+0x00 = varType (the PRIMARY type string -- OG `pcVar13 = *puVar5`, always the 1st %s)
  *   field+0x08 = varOps  (the pointer/array qualifier -- the strstr("*") target, OG `puVar5[1]`)
  *   field+0x10 = varName (OG `puVar5[2]`, also the loop terminator)
@@ -340,7 +340,7 @@ void h_cs_fieldinfo(idCmdArgs *a)
                 sh_printf("cs_fieldinfo: field '%s' size/offset unreadable.\n", field);
                 return;
             }
-            sh_printf("Size %d, offset %d\n", size, off);      /* OG verbatim (cmd_0x21db0.txt) */
+            sh_printf("Size %d, offset %d\n", size, off);      /* OG verbatim (the OG handler @0x21db0) */
             return;
         }
     }
@@ -369,7 +369,7 @@ void h_sh_type(idCmdArgs *a)
 {
     const char *type = cmd_argv(a, 1);
     if (type == NULL) {
-        sh_printf("No type provided!\n");                      /* OG verbatim (cmd_0x21090.txt) */
+        sh_printf("No type provided!\n");                      /* OG verbatim (the OG handler @0x21090) */
         return;
     }
 
@@ -413,7 +413,7 @@ void h_sh_type(idCmdArgs *a)
             if (varops  == NULL) varops  = "";
 
             /* OG fmt-selects on strstr(varOps,"*") -- the QUALIFIER, not the type. Both forms print
-             * THREE %s; the arg ORDER differs per form (copy OG exactly, cmd_0x21090.txt L240-253):
+             * THREE %s; the arg ORDER differs per form (copy OG exactly, @0x21090 L240-253):
              *   star    (varOps has '*'): "\t%s%s %s;..." = (varType, varOps, varName)
              *   no-star                 : "\t%s %s%s;..." = (varType, varName, varOps) */
             int is_ptr = (strstr(varops, "*") != NULL);

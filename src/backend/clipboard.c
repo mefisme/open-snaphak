@@ -1,5 +1,5 @@
 /* clipboard.c -- see clipboard.h. Clean-room CF_TEXT clipboard-set, port of OG
- * XINPUT1_3 FUN_1800053f0 (clipboard_0x53f0.txt).
+ * XINPUT1_3 FUN_1800053f0.
  *
  * OG decompile (DIRECT):
  *   if (OpenClipboard(NULL)) {
@@ -13,7 +13,7 @@
  *       CloseClipboard();
  *   }
  *
- * Hardening over OG (faithful + safe -- clipboard_0x53f0.txt clean-room notes):
+ * Hardening over OG (faithful + safe -- our clean-room notes):
  *   - guard GlobalAlloc==NULL and GlobalLock==NULL (OG checks neither);
  *   - on SetClipboardData failure GlobalFree(hMem) to avoid the leak OG would have;
  *   - on SUCCESS do NOT free (the clipboard owns hMem);

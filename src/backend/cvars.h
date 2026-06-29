@@ -1,7 +1,7 @@
 /* cvars.h -- register SnapHak's 9 cvars with the engine cvar system
  * (clean-room reimplementation of OG XINPUT1_3's static-init cvar push_back + spine flush).
  *
- * OG SnapHak declares 9 cvars as static descriptors (cvar_descriptor_structs.txt) and, in the install
+ * OG SnapHak declares 9 cvars as static descriptors (from our cvar-descriptor RE) and, in the install
  * spine FUN_1800229b1, flushes them through the engine cvar register fn:
  *   ( *(engineBase+0x1a04f00) )( desc+0x28, name, default, typecode, desc, argComp )
  * where typecode = 1=BOOL, 2=INT, 4=FLOAT, passed VERBATIM as the engine `flags` arg (the engine
@@ -50,8 +50,8 @@ int sh_cvars_install(void *cvar_register, const void *module_base);
 
 /* Read the live INT/BOOL value of cvar `index` (one of the B2_CVAR_* constants) from OUR engine-
  * populated backing object. The engine stores valueInteger at idCVar+0x30 (DIRECT from the source-of-
- * record (the engine idlib schema) idCVar + the OG DAT_18003d2b8==idCVar+0x30 cross-check,
- * cvar_value_offset.txt). SEH-guarded; returns `def` on a bad index, before install, or any fault.
+ * record (the engine idlib schema) idCVar + the OG DAT_18003d2b8==idCVar+0x30 cross-check).
+ * SEH-guarded; returns `def` on a bad index, before install, or any fault.
  * NOTE (the build-specific-offset trap): +0x30 is DIRECT-from-source but the live read should be
  * spot-checked at FIRE (set the cvar to 1, confirm this returns 1). */
 int sh_cvar_value_int(int index, int def);

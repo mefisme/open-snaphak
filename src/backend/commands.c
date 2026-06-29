@@ -33,13 +33,13 @@
 /* ------------------------------------------------------------------------ engine fn typedefs ------ */
 
 /* idCmdSystemLocal::AddCommand(cmdsys, name, handler, help, argComp, flags). DIRECT shape from
- * engine_0x1aa3630.txt + xreg_0x229b1.txt; we pass argComp=NULL, flags=2 (see register_cmd: 2 -> stored 6
+ * the AddCommand decompile @0x1aa3630 + the registrar @0x229b1; we pass argComp=NULL, flags=2 (see register_cmd: 2 -> stored 6
  * -> the command lands in the FULL *and* DEV tables + is dev-cheat-exempt, so the `~` console finds it even
  * in dev mode; the OG left param5/6 as register garbage = effectively 0 = FULL-only = dev-gated).
  *
  * SLOT MAP (engine 0x1aa3630 stores: cmd[0]=name=param_2, cmd[1]=handler=param_3, cmd[2]=param_5,
  * cmd[3]=param_4, cmd[4]=flags). We register help in param_4 (-> cmd[3]) -- this is FAITHFUL to OG SnapHak:
- * its own registrar (xreg_0x229b1.txt) calls AddCommand(cmdsys, name, handler, help) with the help string
+ * its own registrar (@0x229b1) calls AddCommand(cmdsys, name, handler, help) with the help string
  * as param_4 and nothing for param_5/param_6, and chrispy's commands display their help in-game -> cmd[3]
  * (param_4) IS the help-display slot the engine reads. (the reference implementation's clone_bss_apply uses the other order --
  * help in param_5, NULL in param_4 -- but it is an INTERNAL command never shown to users, so its help-slot
@@ -187,7 +187,7 @@ void *sh_resolve_cmdsys(const sig_result *results, size_t n, const uint8_t *modu
  * a single idCmdArgs* arg. Handlers run as a Cbuf callback on the engine main thread (console exec). */
 
 /* [1] snapHak_rawmaps_on -> the SHIPPED sh_rawmap_swap_arm(1) gate (single source of truth). Prints the
- *     OG RUNTIME message "Enabling raw snapmap save/load." (cmd_0x21050.txt), NOT the AddCommand help. */
+ *     OG RUNTIME message "Enabling raw snapmap save/load." (the OG handler @0x21050), NOT the AddCommand help. */
 static void h_rawmaps_on(idCmdArgs *a)
 {
     (void)a;
@@ -195,7 +195,7 @@ static void h_rawmaps_on(idCmdArgs *a)
     sh_printf("Enabling raw snapmap save/load.\n");
 }
 /* [2] snapHak_rawmaps_off -> sh_rawmap_swap_arm(0). Prints OG RUNTIME "Disabling raw snapmap save/load."
- *     (cmd_0x21070.txt), NOT the AddCommand help. */
+ *     (the OG handler @0x21070), NOT the AddCommand help. */
 static void h_rawmaps_off(idCmdArgs *a)
 {
     (void)a;
@@ -284,7 +284,7 @@ static void lr_buf_append(lr_buf *b, const char *s)
 /* [14] sh_listres <type> [filter] -- GetDeclsOfType(type), walk the decl array, print each name; if
  * argv[2] is present, substring-filter; if snaphak_copy_reslist_to_clipboard is set, accumulate the
  * matched names and copy the list to the clipboard at the end. Clone of OG FUN_180022000
- * (cmd_0x22000.txt / listres_mechanism.txt). */
+ * (its decompile @0x22000 + our listres-mechanism notes). */
 static void h_sh_listres(idCmdArgs *a)
 {
     const char *type   = cmd_argv(a, 1);
@@ -347,7 +347,7 @@ static void h_sh_listres(idCmdArgs *a)
 }
 
 /* [5] sh_entlist [filter] -- print the vendored idEntity class-name list, skipping idTarget_Command;
- * if argv[1] is present, substring-filter. Clone of OG FUN_180021b50 (cmd_0x21b50.txt) -- the OG walks
+ * if argv[1] is present, substring-filter. Clone of OG FUN_180021b50 (its decompile @0x21b50) -- the OG walks
  * a STATIC ptr-table, so the clone walks our vendored B2_ENTLIST_CLASSES verbatim; plain strcmp/strstr,
  * no engine call. */
 static void h_sh_entlist(idCmdArgs *a)
@@ -626,7 +626,7 @@ static int eng_bmodel_builder(void *out208, const char *input, const char *outpu
                                    * R9 (BModelBuilder sig comment). The clone memsets a 0xD0 buffer to 0x01. */
 
 /* [20] sh_genmd6model <input> <output> -- compile a .md6model into a bmd6model. Real port of OG
- * FUN_18000b560. OG ORDER (DIRECT, cmd_0xb560.txt): gate argc>2 (>=3); DefaultIdStrCtor(opts);
+ * FUN_18000b560. OG ORDER (DIRECT, from its decompile @0xb560): gate argc>2 (>=3); DefaultIdStrCtor(opts);
  * Md6Ctor(&md6); IdStrAssign(input, argv[1]); IdStrCtor(output, argv[2]); Md6SetOutput(&md6, output);
  * IdStrDtor(output); Md6Build(&md6); IdStrDtor(opts). The OG ctor's a default opts idStr it never passes
  * to the call chain (a scratch the md6 ctx already owns at md6+0x60) -- we ctor+dtor it faithfully to
@@ -680,7 +680,7 @@ static void h_sh_genmd6model(idCmdArgs *a)
 }
 
 /* [19] sh_genbmodel <input> <output> -- generate a bmodel from a .obj/.ase/.lwo. Real port of OG
- * FUN_18000b4a0. OG ORDER (DIRECT, cmd_0xb4a0.txt): gate argc>2; memset(opts,1,0xD0); DefaultIdStrCtor(s);
+ * FUN_18000b4a0. OG ORDER (DIRECT, from its decompile @0xb4a0): gate argc>2; memset(opts,1,0xD0); DefaultIdStrCtor(s);
  * BModelBuilder(out208, argv[1]=input, argv[2]=output, &opts); IdStrDtor(s). The default idStr `s` is a
  * scratch the OG ctor's + dtor's around the call (not passed to BModelBuilder) -- mirror its lifecycle.
  * Every engine call SEH-guarded; the out208 result + the 0xD0 opts buffer are stack-local + zero-init. */
@@ -956,7 +956,7 @@ static void h_sh_dispatch(idCmdArgs *a)
  * registrar stores rec at array[eventnum] and eventnum increments per registration). So the OG's use of
  * the loop index i as the %d number is correct (i == eventnum).
  *
- * THE OG sprintf BUG (cmd_0x26450.txt L45): FUN_180025130(buf, "#define EV_%s %d\n#define FSPEC_%s \"%s\"\n",
+ * THE OG sprintf BUG (in the OG decompile @0x26450, L45): FUN_180025130(buf, "#define EV_%s %d\n#define FSPEC_%s \"%s\"\n",
  * name, i) passes 4 conversions but only 2 varargs -> the 2nd FSPEC_%s and the "%s" read register garbage.
  * THE CLONE EMITS THE INTENDED OUTPUT, not bug-for-bug: all 4 fields resolved (name, i, name, fspec). If a
  * record's fspec is unreadable/empty (a NULL rec+0x10 -- e.g. a no-arg event), we emit the EV_ line +
@@ -1068,7 +1068,7 @@ static void h_sh_superscriptop(idCmdArgs *a)
     dump[0] = '\0';
     char line[1024];
 
-    /* The OG opened with an eventdef_ss_t struct-comment header (cmd_0x26450.txt L38-40); keep a header
+    /* The OG opened with an eventdef_ss_t struct-comment header (in the OG decompile @0x26450, L38-40); keep a header
      * that documents the emitted #define pair (intended output, not the OG's struct decl which the OG
      * never actually filled in). */
     ss_dump_append(dump, sizeof dump, &dlen,

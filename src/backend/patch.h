@@ -5,8 +5,7 @@
  *   [11] render-logging + [18] cs_dontuse -- install jmp-detours over engine code.
  * (Both clusters are later work; this builds + self-tests the LAYER only -- NO engine patches.)
  *
- * It mirrors OG SnapHak's two self-modifying-code primitives (evidence b2-decompiles/
- * t5-devmode-codepatch.txt; OG base 0x180000000):
+ * It mirrors OG SnapHak's two self-modifying-code primitives (OG base 0x180000000):
  *   FUN_180001790(dst,len,src)  = memcpy-to-RX   (VirtualProtect RWX -> copy -> restore)   == code_patch
  *   FUN_180001850(hookFn,rva)   = inline-detour installer  (jmp at engineBase+rva -> hook) == install_detour
  *   FUN_180001920(tramp)        = uninstall                                                == uninstall_detour

@@ -3,7 +3,7 @@
  * tranches, sh_dumpdef / sh_spawninfo / sh_type) to copy a generated text list onto the
  * Windows clipboard.
  *
- * OG sequence (clipboard_0x53f0.txt, DIRECT): OpenClipboard(NULL) -> strlen -> GlobalAlloc
+ * OG sequence (DIRECT, the FUN_1800053f0 decompile): OpenClipboard(NULL) -> strlen -> GlobalAlloc
  * (GMEM_MOVEABLE, len+1) -> GlobalLock -> memcpy(dst, text, len+1) -> GlobalUnlock ->
  * EmptyClipboard -> SetClipboardData(CF_TEXT, hMem) -> CloseClipboard. On SetClipboardData
  * success the OS owns the handle (do NOT free); OG leaks on the failure path -- the clone

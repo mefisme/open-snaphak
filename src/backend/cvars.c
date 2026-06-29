@@ -1,14 +1,14 @@
 /* cvars.c -- see cvars.h. The 9-cvar registrar (clone of OG XINPUT1_3's static-init cvar table +
  * spine flush FUN_1800229b1 / FUN_180022610).
  *
- * CVAR REGISTER ABI (DIRECT, cvar_spine_flush_disasm.txt @0x22610 + ecvar_0x1a04f00.txt + B2_SUMMARY.txt):
+ * CVAR REGISTER ABI (DIRECT, from the cvar-register flush disasm @0x22610):
  *   ( CvarRegister )( self [embedded idCVar], name, default, typecode, desc, argComp )
  * We call the OUTER engine fn 0x1A04F00 (resolved as "CvarRegister"), NOT the inner idCVarSystem::
  * Register 0x1A05E70 -- the outer self-defaults the two engine .data globals, so we never touch them.
  * typecode (1=BOOL 2=INT 4=FLOAT) is passed VERBATIM as the engine `flags` arg (the engine massages the
  * bits internally). None of the 9 carry EXPOSE/NOCHEAT -> non-EXPOSE / gate-1-invisible (faithful OG).
  *
- * Clean-room: ported from our own RE (cvar_descriptor_structs.txt). Zero OG SnapHak bytes.
+ * Clean-room: ported from our own RE. Zero OG SnapHak bytes.
  */
 #include <windows.h>
 #include <stdint.h>
@@ -66,7 +66,7 @@ typedef int (*name_hash_fn)(const char *name);
  * the registered name lives at g_cvar_objs[i][0x40]. We hash CVARS[i].name (identical bytes) directly. */
 #define IDCVAR_NAME_OFF           0x40
 
-/* The 9 cvars, VERBATIM from cvar_descriptor_structs.txt (name / default / typecode 1=BOOL 2=INT
+/* The 9 cvars, VERBATIM from our cvar-descriptor RE (name / default / typecode 1=BOOL 2=INT
  * 4=FLOAT / description). Order matches the descriptor dump. */
 typedef struct cvar_row {
     const char *name;
@@ -110,7 +110,7 @@ static int register_one(cvar_register_fn reg, int i)
 }
 
 /* DIRECT self-readback verification (independent of the production console's non-EXPOSE hiding):
- * idCVarSystem::Register (ecvar_0x1a05e70.txt) populates the embedded idCVar object -- name@self+0x40,
+ * idCVarSystem::Register (@0x1a05e70) populates the embedded idCVar object -- name@self+0x40,
  * default@+0x48, desc@+0x50, flags@+0x58 -- and links self+0x80 into the engine cvar list. We confirm
  * registration TOOK EFFECT by reading our (zero-initialized) backing block back: bit1 = name@+0x40 strcmp
  * matches our cvar name (a proper cvar entry); bit0 = the block mutated from zero (Register wrote into it).

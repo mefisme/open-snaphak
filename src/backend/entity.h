@@ -15,7 +15,7 @@
  *     deref is SEH-guarded; a wrong offset degrades to a clean no-op + log, never a crash/teleport-to-
  *     garbage.
  *   - the sh_dumpdef ent+0x6d0 -> +0x140 resolved-def-text chain is source-of-record-confirmed
- *     (idlib_schema.json) but build-sensitive -> SEH-guarded + non-null gated.
+ *     (the engine idlib schema) but build-sensitive -> SEH-guarded + non-null gated.
  *
  * Clean-room: ported from our own RE (the b2-t3-re foundation + the OG command decompiles). Zero OG bytes.
  */

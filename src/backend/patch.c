@@ -1,7 +1,7 @@
 /* patch.c -- see patch.h. The reusable engine-code PATCH/DETOUR layer.
  *
- * code_patch/code_unpatch = the memcpy-to-RX primitive (port of OG FUN_180001790, evidence
- * b2-decompiles/t5-devmode-codepatch.txt): VirtualProtect RWX -> write -> FlushInstructionCache ->
+ * code_patch/code_unpatch = the memcpy-to-RX primitive (port of OG FUN_180001790, from the devmode
+ * code-patch decompile): VirtualProtect RWX -> write -> FlushInstructionCache ->
  * restore protection, with a verify-before-write guard and a recorded restore-handle. The detour family
  * (sh_install_detour / sh_uninstall_detour) is a thin REUSE of hook.c's already-cloned inline-detour
  * installer (OG FUN_180001850 / FUN_180001920) -- NOT reimplemented here.

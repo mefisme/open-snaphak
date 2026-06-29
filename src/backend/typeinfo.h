@@ -29,8 +29,8 @@
  *     record/field/enum deref is SEH-guarded; both walk loops carry an iteration CAP so a never-terminating
  *     (garbage) record cannot spin forever.
  *
- * Clean-room: ported from our own RE (the foundation: t4-csfieldinfo.txt / t4-shtype.txt +
- * the OG command decompiles cmd_0x21db0.txt / cmd_0x21090.txt). Zero OG SnapHak bytes.
+ * Clean-room: ported from our own RE (the foundation: the cs_fieldinfo + sh_type decompiles +
+ * the OG command decompiles @0x21db0 / @0x21090). Zero OG SnapHak bytes.
  */
 #ifndef BACKEND_B2_TYPEINFO_H
 #define BACKEND_B2_TYPEINFO_H
