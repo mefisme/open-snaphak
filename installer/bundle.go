@@ -14,9 +14,7 @@ import (
 )
 
 // repoSlug is the GitHub "owner/repo" the installer downloads releases from.
-// TODO: set this when the origin repo is chosen (deferred sub-decision in the distribution spec).
-// Until then, the GitHub path is disabled and you install with --local <dist>.
-const repoSlug = "OWNER/open-snaphak"
+const repoSlug = "snaphak/open-snaphak"
 
 // releaseAsset is the stable asset name CI publishes on every release (so latest/download works).
 const releaseAsset = "snaphak-bundle.zip"
@@ -107,9 +105,6 @@ func fileSHA256(path string) (string, error) {
 // downloadRelease fetches + extracts the release zip into a temp dir, returning that dir and a cleanup func.
 func downloadRelease(tag string) (dir string, cleanup func(), err error) {
 	noop := func() {}
-	if strings.HasPrefix(repoSlug, "OWNER/") {
-		return "", noop, fmt.Errorf("release download is not configured yet (repoSlug placeholder) -- use --local <dist> for now")
-	}
 	var url string
 	if tag == "" || tag == "latest" {
 		url = fmt.Sprintf("https://github.com/%s/releases/latest/download/%s", repoSlug, releaseAsset)

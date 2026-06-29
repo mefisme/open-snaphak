@@ -37,7 +37,8 @@ With no `--local`, `install`/`update` download the latest release bundle from Gi
   the dirs it created **only if they're empty** — a pre-existing `plugins/` or other content is left intact. Your
   `%USERPROFILE%\snaphak` data (overrides / prefabs / rawmaps) is **never** touched.
 
-## Not yet configured
+## Releases
 
-The GitHub-release download path needs the origin repo set (`repoSlug` in `bundle.go`, `$repo` in `install.ps1`,
-both currently the `OWNER/open-snaphak` placeholder). Until then, use `--local <dist>`.
+`install` / `update` download from **`snaphak/open-snaphak`** releases. The release URLs go live once the first
+GitHub Release is published (CI cuts one on a `v*` tag); until then, use `--local <dist>` to install from a local
+`package.ps1` build.
