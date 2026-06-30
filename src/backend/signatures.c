@@ -368,30 +368,37 @@ const sig_entry BACKEND_ENGINE_SIGNATURES[] = {
                            * capstone scan HITS:1. RE'd DIRECT from our own decompile. */
       "48 8B C4 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 A8 F7 FF FF 48 81 EC 20 09 00 00",
       0x54F950u },
-    { "ConnectOutputCreator", /* FUN_140cdbb40 -- the editor Add-Logic OUTPUT-list creator. wiring_mode.c
-                               * (sh_target_any interactive wire-any) resolves THIS as the version-portable
-                               * anchor for the connection primitive FUN_1405a70d0: the primitive shares its
-                               * prologue with a byte-identical edge-REMOVE sibling (FUN_1405a72a0, differs
-                               * only in its inner call target) so it cannot be isolated by its own bytes;
-                               * the creator lays exactly ONE such edge, so wiring_mode scans this body for
-                               * the single `call rel32` whose target carries the primitive's prologue and
-                               * decodes it. Unique @ 34-byte prologue (3 reg-saves + MOV R9,[RDX+0x204c8] +
-                               * MOVSXD R10,[RCX+0x10] -- distinct from the 3 sibling creators cdb610/cdb860/
-                               * cdb990). Re-derive (per DOOM build): decompile FUN_140cdbb40. */
+    { "ConnectOutputCreator", /* FUN_140cdbb40 -- the editor wire tool's connect creator (a vtable-dispatched
+                               * FSM leaf reached on the target pick). wiring_mode.c inline-detours it (Hook 2
+                               * of the interactive wire-any mode): in wire-mode it records the target into the
+                               * tool's chain slot 1 + sets the direct-edge flags, so the tool's trailing
+                               * finalize lays a direct source->target edge for ANY target -- including a
+                               * node-less target the stock creator would refuse (the detour is flag-gated +
+                               * off by default, so OFF is a transparent passthrough). ABI: void(tool, world,
+                               * idx[int]); world+0x204c8 = the editor entity table. Unique @ 34-byte prologue
+                               * (3 reg-saves + MOV R9,[RDX+0x204c8] + MOVSXD R10,[RCX+0x10] -- distinct from
+                               * the 3 sibling creators cdb610/cdb860/cdb990). Re-derive (per DOOM build):
+                               * decompile FUN_140cdbb40. */
       "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 20 "
       "4C 8B 8A C8 04 02 00 48 8B EA 4C 63 51 10",
       0xCDBB40u },
-    { "PickProcessor",     /* FUN_140cdad70 -- the editor wire tool's central pick processor (a vtable
-                            * slot; also called internally on deactivate cdb110 / re-pick cdb440). It
-                            * classifies every picked entity and drives the stock node-mediated connect
-                            * flow. wiring_mode.c inline-detours it for the interactive wire-any mode (the
-                            * detour is flag-gated + off by default, so OFF is a transparent passthrough).
-                            * ABI: void(tool, passthrough, WORLD, pickedIndex[uint]); WORLD+0x204c8=ET.
-                            * Unique @ 27-byte prologue (3 reg-saves + push rdi + sub rsp,0x20 + MOV RAX,
-                            * [R8+0x204c8]); zero wildcards, file-wide unique (scan HITS:1 @ 0xcdad70 vs an
-                            * unpacked DOOM image). Re-derive (per DOOM build): re-extract the prologue. */
-      "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 20 49 8B 80 C8 04 02 00",
-      0xCDAD70u },
+    { "WireOutputState",   /* FUN_140cdaa30 -- the editor wire tool's output-select FSM leaf (reached after
+                            * the first/source pick; the stock leaf raises a modal output-node picker).
+                            * wiring_mode.c inline-detours it (Hook 1 of the interactive wire-any mode): in
+                            * wire-mode it records the source, selects the direct-edge creator, advances the
+                            * tool to target-select (think-state 2), and returns WITHOUT raising the modal --
+                            * so the tool's input/camera/escape handling stays alive (a 0 think-state with the
+                            * tool active would swallow input). The detour is flag-gated + off by default, so
+                            * OFF is a transparent passthrough. ABI: void(tool, a, world). Unique @ 49 bytes:
+                            * the generic save prologue + MOVZX EAX,[RCX+0xd] + 3 reg-moves + TEST AL,0x40,
+                            * then (past the build-volatile rel8 branch, masked) MOV RAX,[R8+0x21088] + LEA
+                            * R9,[RCX+0x48] + MOV R8D,3 -- the category-3 output-picker fingerprint that
+                            * distinguishes it from its sibling leaves cda910/cdab30 (which share the
+                            * prologue). Scan HITS:1 @ 0xcdaa30 vs an unpacked DOOM image; the 1 wildcard is
+                            * the rel8 jnz disp. Re-derive (per DOOM build): re-extract the prologue. */
+      "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 0F B6 41 0D 49 8B F8 48 8B F2 48 8B D9 A8 40 "
+      "75 ?? 49 8B 80 88 10 02 00 4C 8D 49 48 41 B8 03 00 00 00",
+      0xCDAA30u },
     { "ToolReset",         /* FUN_140cdb3e0 -- the wire tool reset: sets the four pick slots
                             * (tool+0x10..+0x1c) to -1 and clears the flag/picker-result fields. wiring_mode
                             * calls it after each handled pick to keep the tool clean (and on OFF to clear a
