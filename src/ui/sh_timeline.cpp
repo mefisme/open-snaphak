@@ -219,6 +219,9 @@ static bool tl_iface_is_entity_mode(sh_iface *iface)
 static int tl_iface_apply_class_inherit(sh_iface *iface, int id, const char *cls, const char *inh)
 {
     if (!iface || !iface->vtbl || !iface->vtbl->apply_class_inherit) return -1;
+    /* Defense-in-depth: NEVER morph a stale/deleted id -- the engine's class-derive compat check dereferences
+     * the entity's className idStr, and a freed slot's dangling ptr faults (the delete-then-create crash). */
+    if (!tl_iface_is_valid(iface, id)) return -1;
     return iface->vtbl->apply_class_inherit(iface, id, cls, inh);
 }
 
@@ -1597,7 +1600,15 @@ void sh_timeline_create_new(ShWinController *win)
     int ids[1] = {-1};
     int nsel = (iface->vtbl && iface->vtbl->get_selection) ? iface->vtbl->get_selection(iface, ids, 1) : 0;
 
-    if (nsel > 0 && ids[0] >= 0) {
+    /* The selection must be a LIVE entity. After a DELETE the editor selection can dangle at the freed slot; the
+     * MORPH branch below would then reclass that freed entity, and the atomic +0x268 apply's class-derive compat
+     * check reads the dangling className idStr -> an access-violation in the engine string compare (the observed
+     * delete-timeline-then-create-timeline crash). A stale/invalid selection is treated as "nothing selected" so
+     * we fall through to the SPAWN branch (create a fresh timeline) -- the same is_valid_id guard every other
+     * per-entity read uses (tl_build_entity_model, sh_tabs). */
+    bool sel_live = (nsel > 0 && ids[0] >= 0 && tl_iface_is_valid(iface, ids[0]));
+
+    if (sel_live) {
         /* MORPH branch: reclass the selected entity into a timeline host + strip its model. LIVE-FIX 2026-06-25:
          * the class+inherit must go through the ATOMIC +0x268 apply, NOT the bss-apply alone -- the bss changed
          * className but left the engine inherit at the entity's original (e.g. snapmaps/audio/2d_speaker), so the
