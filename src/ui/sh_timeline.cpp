@@ -414,6 +414,21 @@ static ShArgKind tl_classify_arg(const std::string &typeName)
     return SH_ARG_ENUM;
 }
 
+/* The component KEY NAMES for a multi-component (SH_ARG_VECN) arg, by engine type. The engine reads/writes these
+ * as a STRUCTURED object -- idVec3={x,y,z} / idAngles={pitch,yaw,roll} / idColor={r,g,b,a} -- NOT a space-separated
+ * string. Source-of-record: idVec3/idAngles/idColor field names + the corpus color form {"r":..,"g":..,"b":..,"a":..}
+ * + the engine event-arg reader (opens an object, reads named float fields; a string value is rejected). Returns
+ * the key array + count via *n; defaults to vec3 (x/y/z). */
+static const char *const *tl_vecn_keys(const std::string &typeName, int *n)
+{
+    static const char *const VEC3[] = { "x", "y", "z" };
+    static const char *const ANG[]  = { "pitch", "yaw", "roll" };
+    static const char *const COL[]  = { "r", "g", "b", "a" };
+    if (typeName == "color")  { *n = 4; return COL; }
+    if (typeName == "angles") { *n = 3; return ANG; }
+    *n = 3; return VEC3;
+}
+
 /* The per-entity-class asset value list (render-models / anim-web paths) for a class slug (entityDef.inherit),
  * or NULL. Small table (only the configurable-model/anim classes) -> linear scan. */
 static const ShEntityAssets *tl_lookup_entity_assets(const std::string &slug)
@@ -596,14 +611,14 @@ static ShArgWidget tl_build_arg_widget(ShTimelineEditor *ed, QWidget *parent, co
         }
         aw.editor = combo;
     } else if (aw.kind == SH_ARG_VECN) {
-        /* vec3/angles -> 3 fields (x y z); color -> 4 fields (r g b a). The OG builds separate component editors
-         * (3x QLineEdit for vec3/angles + a colour editor) rather than one box. On-disk = the space-separated
-         * component string ({vec3:"x y z"} DIRECT; color the same idTech vecN text, INFERRED). We split the loaded
-         * value on whitespace into the fields + re-join on commit -> round-trips whatever the exact spacing is. */
-        int n = (typeName == "color") ? 4 : 3;
-        static const char *VEC_PH[] = { "x", "y", "z" };
-        static const char *COL_PH[] = { "r", "g", "b", "a" };
-        const char **ph = (typeName == "color") ? COL_PH : VEC_PH;
+        /* vec3/angles -> 3 fields; color -> 4 fields. Component editors (one QLineEdit per component), placeholder-
+         * labelled with the engine field names (vec3=x/y/z, angles=pitch/yaw/roll, color=r/g/b/a). ON-DISK = a
+         * STRUCTURED object {<type>:{<key>:float,...}} (see tl_build_arg_json / the load path below) -- NOT a
+         * space-separated string; the engine arg reader opens an object and reads named float fields, and rejects
+         * a string value. Internally we keep the components as a space-joined "v0 v1 v2" and convert at the JSON
+         * boundary, so the field order here == the tl_vecn_keys order. */
+        int n = 0;
+        const char *const *ph = tl_vecn_keys(typeName, &n);
         QWidget *box = new QWidget(parent);
         QHBoxLayout *hl = new QHBoxLayout(box);
         hl->setContentsMargins(0, 0, 0, 0);
@@ -1011,6 +1026,23 @@ static void tl_build_event_row(ShTimelineEditor *ed, ShEntityTab *tab, const QJs
                     else                           _snprintf_s(b, sizeof b, _TRUNCATE, "%g", d);
                     initVal = b;
                 }
+                else if (v.isObject()) {
+                    /* a STRUCTURED vec3/angles/color arg {<key>:float,...} -> join into the internal space-separated
+                     * "v0 v1 v2" the SH_ARG_VECN widget splits into its component fields (symmetric with the
+                     * structured commit in tl_build_arg_json). Reads the components in tl_vecn_keys order. */
+                    QJsonObject vo = v.toObject();
+                    int n = 0;
+                    const char *const *keys = tl_vecn_keys(typeName, &n);
+                    QStringList parts;
+                    for (int i = 0; i < n; i++) {
+                        double comp = vo.value(QString::fromUtf8(keys[i])).toDouble(0.0);
+                        char b[64];
+                        if (comp == (double)(long long)comp) _snprintf_s(b, sizeof b, _TRUNCATE, "%lld", (long long)comp);
+                        else                                 _snprintf_s(b, sizeof b, _TRUNCATE, "%g", comp);
+                        parts << QString::fromUtf8(b);
+                    }
+                    initVal = std::string(parts.join(' ').toLocal8Bit().constData());
+                }
                 aw = tl_build_arg_widget(ed, row->rowWidget, typeName, initVal, "", argName, tab->inheritSlug);
                 lbl = typeName;
             }
@@ -1173,6 +1205,21 @@ static QJsonObject tl_build_arg_json(const ShArgWidget &aw)
         argObj.insert(QString::fromStdString(aw.typeName), QJsonValue(atoi(val.c_str())));
     } else if (aw.kind == SH_ARG_FLOAT) {
         argObj.insert(QString::fromStdString(aw.typeName), QJsonValue(atof(val.c_str())));
+    } else if (aw.kind == SH_ARG_VECN) {
+        /* STRUCTURED object: {<type>:{<key>:float,...}} -- idVec3={x,y,z}/idAngles={pitch,yaw,roll}/idColor={r,g,b,a}.
+         * The engine event-arg reader opens an object and reads named float fields; a space-separated STRING is NOT
+         * accepted (the old string form threw "SetEntityEditState: failed to parse typeinfo state" at map load).
+         * Emit ALL components explicitly (the reader leaves an absent field uninitialized). `val` is the internal
+         * space-joined "v0 v1 v2" from the component editors (tl_read_arg_value). */
+        int n = 0;
+        const char *const *keys = tl_vecn_keys(aw.typeName, &n);
+        QStringList parts = QString::fromStdString(val).split(' ', QString::SkipEmptyParts);
+        QJsonObject vecObj;
+        for (int i = 0; i < n; i++) {
+            double comp = (i < parts.size()) ? parts[i].toDouble() : 0.0;
+            vecObj.insert(QString::fromUtf8(keys[i]), QJsonValue(comp));
+        }
+        argObj.insert(QString::fromStdString(aw.typeName), vecObj);
     } else {
         /* string / enum / path-family -> the member/value as a string keyed by the type-name. */
         argObj.insert(QString::fromStdString(aw.typeName), QString::fromStdString(val));
@@ -1209,11 +1256,40 @@ static QJsonObject tl_build_event_json(ShEventRow *row)
     return ev;
 }
 
-static QJsonObject tl_build_entity_event_json(ShEntityTab *tab)
+/* Build the RESOLVABLE engine entity NAME for the tab's target entity. The engine resolves a timeline event's
+ * `entity` (idManagedClassPtr<idEntity>) by an EXACT-STRING name intern (resolver 0x1a25770 / table 0x143082b60;
+ * writer 0x9d2870 case 'e' -> live name @entity+0x388, non-live -> GetUnresolvedEntityName 0x9c78d0). NOT the UI
+ * display label: id_to_string appends " (no module)" for a global/no-module entity -- a clone-UI-only string that
+ * does NOT exist in the engine binary, so it can NEVER match a live entity -> a fresh dangling index -> a silent
+ * downstream deref crash (the map "loads" then crashes at play/resolve; RE timeline-entityref-serialize-re). We
+ * RE-READ id_to_string LIVE from the combo's entity index (so a re-placed entity's CURRENT module is used; once
+ * this ref RESOLVES at commit the engine holds a live managed ptr that then tracks further module moves itself),
+ * then STRIP the " (no module)" suffix -> the module-qualified "<modIdx>_<modName>/<inherit>_<uid>" (proven
+ * resolvable) or, for a still-global entity, the bare "<inherit>_<uid>" tail. A typed (not picked) entry commits
+ * its text verbatim (also stripped). */
+static std::string tl_resolve_entity_ref(ShTimelineEditor *ed, ShEntityTab *tab)
+{
+    std::string ref;
+    QVariant d = tab->entityCombo->currentData(Qt::UserRole);   /* the picked entity's engine index */
+    bool okIdx = false;
+    int idx = d.isValid() ? d.toInt(&okIdx) : 0;
+    if (okIdx && idx >= 0 && ed && ed->iface && ed->iface->vtbl && ed->iface->vtbl->id_to_string) {
+        char buf[256]; buf[0] = '\0';
+        const char *s = ed->iface->vtbl->id_to_string(ed->iface, idx, buf, (int)sizeof buf);
+        if (s && s[0]) ref = s;                                  /* LIVE ref (current module) */
+    }
+    if (ref.empty())                                            /* typed text (no picked entity) -> verbatim */
+        ref = std::string(tab->entityCombo->currentText().toLocal8Bit().constData());
+    static const std::string NOMOD = " (no module)";
+    if (ref.size() >= NOMOD.size() && ref.compare(ref.size() - NOMOD.size(), NOMOD.size(), NOMOD) == 0)
+        ref.erase(ref.size() - NOMOD.size());                   /* the display suffix never belongs in the ref */
+    return ref;
+}
+
+static QJsonObject tl_build_entity_event_json(ShTimelineEditor *ed, ShEntityTab *tab)
 {
     QJsonObject ee;
-    std::string ent = std::string(tab->entityCombo->currentText().toLocal8Bit().constData());
-    ee.insert("entity", QString::fromStdString(ent));
+    ee.insert("entity", QString::fromStdString(tl_resolve_entity_ref(ed, tab)));
 
     QJsonObject eventsObj;
     int j = 0;
@@ -1232,7 +1308,7 @@ static QJsonObject tl_build_component_json(ShTimelineEditor *ed)
     QJsonObject entityEvents;
     int i = 0;
     for (size_t t = 0; t < ed->tabs.size(); t++) {
-        entityEvents.insert(QString("item[%1]").arg(i), tl_build_entity_event_json(ed->tabs[t]));
+        entityEvents.insert(QString("item[%1]").arg(i), tl_build_entity_event_json(ed, ed->tabs[t]));
         i++;
     }
     entityEvents.insert("num", i);
