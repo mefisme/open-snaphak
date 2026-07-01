@@ -310,8 +310,10 @@ func cmdSetToken(args []string) error {
 	return nil
 }
 
-// cmdChangelog prints the published release history (version, date, notes) from GitHub. The changelog LIVES
-// in the GitHub Releases -- CI auto-generates each release's notes from the commits since the previous tag.
+// cmdChangelog prints the release history. The NEWEST release's notes are printed IN FULL to the console --
+// so you can read exactly what changed without leaving the terminal -- while OLDER releases are listed
+// compactly with a link to their GitHub page. The notes are the commit log CI bakes into each release's body
+// (see release.yml); that keeps the newest changelog self-contained (no link needed to read it).
 func cmdChangelog(f flags) error {
 	token := resolveToken(f)
 	var list []ghRelease
@@ -326,35 +328,53 @@ func cmdChangelog(f flags) error {
 	if rec, err := loadRecord(); err == nil {
 		installed = rec.Version
 	}
-	fmt.Println("SnapHak release history (newest first):")
-	for _, r := range list {
-		kind := ""
-		if r.Prerelease {
-			kind = " (beta)"
-		}
-		date := r.PublishedAt
-		if len(date) >= 10 {
-			date = date[:10]
-		}
-		you := ""
-		if r.TagName == installed {
-			you = "   <- you have this"
-		}
-		fmt.Printf("\n%s%s   %s%s\n", r.TagName, kind, date, you)
-		shown := 0
-		for _, line := range strings.Split(strings.TrimSpace(r.Body), "\n") {
-			if strings.TrimSpace(line) == "" {
-				continue
-			}
-			if shown >= 12 {
-				fmt.Printf("    ... full notes: %s\n", r.HTMLURL)
-				break
-			}
-			fmt.Printf("    %s\n", strings.TrimRight(line, "\r"))
-			shown++
+	fmt.Print(formatChangelog(list, installed))
+	return nil
+}
+
+// formatChangelog renders the release history: the newest release's notes IN FULL (verbatim, no truncation
+// and no link), then older releases as a compact list each with a link to its GitHub page. Pure (no I/O) so
+// it is unit-testable. `list` is newest-first (the GitHub API order); `installed` is the currently-installed tag.
+func formatChangelog(list []ghRelease, installed string) string {
+	var b strings.Builder
+
+	// The newest release: full notes, verbatim.
+	newest := list[0]
+	fmt.Fprintf(&b, "Latest release: %s\n\n", releaseHeadline(newest, installed))
+	body := strings.TrimRight(newest.Body, " \t\r\n")
+	if body == "" {
+		b.WriteString("    (no notes were published for this release)\n")
+	} else {
+		for _, line := range strings.Split(body, "\n") {
+			fmt.Fprintf(&b, "    %s\n", strings.TrimRight(line, "\r"))
 		}
 	}
-	return nil
+
+	// Older releases: a compact list, each with a link to its GitHub notes.
+	if len(list) > 1 {
+		b.WriteString("\nEarlier releases:\n")
+		for _, r := range list[1:] {
+			fmt.Fprintf(&b, "  %s\n      %s\n", releaseHeadline(r, installed), r.HTMLURL)
+		}
+	}
+	return b.String()
+}
+
+// releaseHeadline formats a one-line "tag (beta)   date   <- you have this" summary for a release.
+func releaseHeadline(r ghRelease, installed string) string {
+	kind := ""
+	if r.Prerelease {
+		kind = " (beta)"
+	}
+	date := r.PublishedAt
+	if len(date) >= 10 {
+		date = date[:10]
+	}
+	you := ""
+	if r.TagName == installed {
+		you = "   <- you have this"
+	}
+	return fmt.Sprintf("%s%s   %s%s", r.TagName, kind, date, you)
 }
 
 // unzip extracts src into dest, guarding against zip-slip path traversal.

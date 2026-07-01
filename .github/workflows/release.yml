@@ -20,6 +20,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history + tags -- the changelog step diffs this tag against the previous one
       - name: Install Qt 5.9.9
         uses: jurplel/install-qt-action@v4
         with:
@@ -50,6 +52,31 @@ jobs:
           # snaphak.exe is published as a SEPARATE asset, not bundled into the overlay zip.
           Compress-Archive -Force -DestinationPath snaphak-bundle.zip `
             -Path dist\XINPUT1_3.dll, dist\snaphak, dist\platforms, dist\MANIFEST.sha256
+      - name: Build the changelog from the commit log
+        shell: bash
+        run: |
+          # The release BODY is the commit subjects since the previous version tag -- plain text, no links,
+          # so `snaphak changelog` can print it straight to the console (readable even while the repo is
+          # private). GitHub's own generate_release_notes is PR-based; releases here are cut by tagging main
+          # directly (no PRs), so it produces only a "Full Changelog" link -- not what we want.
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          prev="$(git describe --tags --abbrev=0 --match 'v*' "${tag}^" 2>/dev/null || true)"
+          if [ -n "$prev" ]; then
+            echo "Changes since ${prev}:" > notes.md
+            range="${prev}..${tag}"
+          else
+            echo "Initial release." > notes.md
+            range="${tag}"
+          fi
+          echo "" >> notes.md
+          # Commit SUBJECTS only (%s omits body/trailers); the grep is a defensive strip of any authoring
+          # attribution so it can never surface in a published changelog. `|| true` keeps an all-filtered range
+          # from failing the step under `set -o pipefail`.
+          git log --no-merges --pretty=format:'- %s' "$range" \
+            | grep -viE 'co-authored-by|generated with claude|claude\.com/claude-code|noreply@anthropic|🤖' \
+            >> notes.md || true
+          echo "" >> notes.md
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -61,7 +88,7 @@ jobs:
             snaphak-bundle.zip
             dist/snaphak.exe
             installer/install.ps1
-          generate_release_notes: true
+          body_path: notes.md
 
 # --- Auto-re-patcher (PLANNED, not built -- the portability endgame) ---
 # A future job that, on a NEW DOOM build, re-resolves the engine signatures (src/backend/signatures.c) against
