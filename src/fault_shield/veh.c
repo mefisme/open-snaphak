@@ -27,6 +27,7 @@
 #include <windows.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include "engine_layout.h"
 #include "fault_record.h"
 #include "recovery.h"
@@ -50,6 +51,69 @@ static volatile LONG g_classa_seen = 0;  /* Class-A in-editor recoveries (log ra
 static volatile LONG g_diag_seen = 0;    /* DIAGNOSTIC: count of AVs the VEH has logged */
 static char g_why[200];   /* persists: Error(6) reads it as the fmt (rcx) after we return */
 static char g_diag[260];
+
+/* ---- FIRST-CHANCE CRASH LOGGER (crash-forensics: name a death the recovery paths never touch) --------
+ * The recovery logic below only ACTS on AVs/HW-faults whose rip is INSIDE DOOM; it CONTINUE_SEARCHes every
+ * other first-chance exception -- a crash-class fault in a NON-DOOM module (the SnapHak UI DLL, a backend
+ * detour, Qt) or a fastfail/heap-stop -- so those deaths left NO shield trace and an attached debugger saw
+ * only a bare process-terminated. This LOG-ONLY block records ANY crash-class first-chance exception in ANY
+ * module (code + name + rip + module+offset + fault addr), rate-limited + immediate-flush, then falls through
+ * so the recovery logic runs UNCHANGED (it never alters the exception disposition). */
+#define SHIELD_MAX_FIRSTCHANCE 64
+static volatile LONG g_firstchance_seen = 0;
+static char g_fcdiag[320];
+
+/* crash-class = a severity-ERROR status code (0xC.../0xE...), minus the benign first-chance noise + the DOOM
+ * C++ throw (0xE06D7363) which LAYER 2 below handles + logs on its own. */
+static int is_crash_class(DWORD c)
+{
+    if (c == 0x80000003u /*BREAKPOINT*/ || c == 0x80000004u /*SINGLE_STEP*/ ||
+        c == 0x40010005u /*DBG_CONTROL_C*/ || c == 0x40010006u /*DBG_PRINTEXCEPTION_C*/ ||
+        c == 0x4001000Au /*DBG_PRINTEXCEPTION_WIDE_C*/ || c == 0x406D1388u /*MS_VC_SET_THREAD_NAME*/ ||
+        c == 0xE06D7363u /*C++ throw -- handled by LAYER 2*/)
+        return 0;
+    return (c >> 30) == 3;   /* STATUS_SEVERITY_ERROR */
+}
+
+static const char *exc_name(DWORD c)
+{
+    switch (c) {
+        case 0xC0000005u: return "ACCESS_VIOLATION";
+        case 0xC0000006u: return "IN_PAGE_ERROR";
+        case 0xC000001Du: return "ILLEGAL_INSTRUCTION";
+        case 0xC0000025u: return "NONCONTINUABLE";
+        case 0xC0000094u: return "INT_DIVIDE_BY_ZERO";
+        case 0xC0000096u: return "PRIVILEGED_INSTRUCTION";
+        case 0xC00000FDu: return "STACK_OVERFLOW";
+        case 0xC0000374u: return "HEAP_CORRUPTION";
+        case 0xC0000409u: return "STACK_BUFFER_OVERRUN/FASTFAIL";
+        case 0xC000041Du: return "FATAL_USER_CALLBACK";
+        default:          return "status";
+    }
+}
+
+/* Resolve an address to "<module-basename>+0x<offset>". Best-effort; a failed lookup yields "?". Uses the
+ * FROM_ADDRESS/UNCHANGED_REFCOUNT flags (no LoadLibrary side effect); called only on the rate-limited log path. */
+static void module_at(void *addr, char *out, size_t cap, uintptr_t *off)
+{
+    HMODULE h = NULL;
+    out[0] = '\0';
+    if (off) *off = 0;
+    if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                           GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           (LPCWSTR)addr, &h) && h) {
+        char path[MAX_PATH];
+        const char *base = "?";
+        if (GetModuleFileNameA(h, path, MAX_PATH)) {
+            char *s = strrchr(path, '\\');
+            base = s ? s + 1 : path;
+        }
+        _snprintf_s(out, cap, _TRUNCATE, "%s", base);
+        if (off) *off = (uintptr_t)addr - (uintptr_t)h;
+    } else {
+        _snprintf_s(out, cap, _TRUNCATE, "?");
+    }
+}
 
 static int rip_in_doom(void *rip)
 {
@@ -238,6 +302,26 @@ static LONG CALLBACK shield_veh(PEXCEPTION_POINTERS ep)
     EXCEPTION_RECORD *er = ep->ExceptionRecord;
     DWORD code = er->ExceptionCode;
     void *rip  = (void *)ep->ContextRecord->Rip;
+
+    /* FIRST-CHANCE CRASH LOGGER (LOG-ONLY -- the exception disposition is NOT touched here; the recovery
+     * layers below run exactly as before). Names any crash-class fault the recovery paths ignore (a fault in
+     * a non-DOOM module, a fastfail/heap-stop) so a `crash=None`/no-dump death is no longer anonymous.
+     * SEH-guarded: a fault while formatting the diagnostic must never crash inside the VEH. */
+    if (is_crash_class(code) && InterlockedIncrement(&g_firstchance_seen) <= SHIELD_MAX_FIRSTCHANCE) {
+        __try {
+            char mod[80]; uintptr_t moff = 0;
+            module_at(rip, mod, sizeof mod, &moff);
+            void *fa = (code == EXCEPTION_ACCESS_VIOLATION && er->NumberParameters >= 2)
+                         ? (void *)er->ExceptionInformation[1] : NULL;
+            uintptr_t drva = rip_in_doom(rip) ? ((uintptr_t)rip - (uintptr_t)g_doom_base) : 0;
+            _snprintf_s(g_fcdiag, sizeof g_fcdiag, _TRUNCATE,
+                "FIRST-CHANCE code=0x%08lx (%s) rip=%p mod=%s+0x%llx doom_rva=0x%llx fault=%p",
+                (unsigned long)code, exc_name(code), rip, mod, (unsigned long long)moff,
+                (unsigned long long)drva, fa);
+            shield_fault fc = { "fc", (int)code, g_fcdiag, drva, (uintptr_t)fa };
+            shield_emit(&fc);
+        } __except (EXCEPTION_EXECUTE_HANDLER) {}
+    }
 
     /* LAYER 2 -- a DOOM C++ throw (MSVC 0xE06D7363) is the idException an Error(6)/downgraded-FatalError
      * raises. NOTE: a C++ throw's rip is inside kernel32's RaiseException, NOT DOOM, so identify it by the
