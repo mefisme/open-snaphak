@@ -70,10 +70,13 @@ jobs:
             range="${tag}"
           fi
           echo "" >> notes.md
-          # Commit SUBJECTS only (%s omits body/trailers); the grep is a defensive strip of any authoring
-          # attribution so it can never surface in a published changelog. `|| true` keeps an all-filtered range
-          # from failing the step under `set -o pipefail`.
+          # Commit SUBJECTS only (%s omits body/trailers). Two defensive filters:
+          #  1) drop internal commit types (ci/chore/scrub/docs/tests/release/refactor/build/style) -- they are
+          #     not user-facing AND are where internal tooling terminology would otherwise surface publicly;
+          #  2) strip any authoring attribution.
+          # `|| true` keeps an all-filtered range from failing the step under `set -o pipefail`.
           git log --no-merges --pretty=format:'- %s' "$range" \
+            | grep -viE '^- (ci|chore|scrub|docs|tests?|release|refactor|build|style|meta): ' \
             | grep -viE 'co-authored-by|generated with claude|claude\.com/claude-code|noreply@anthropic|🤖' \
             >> notes.md || true
           echo "" >> notes.md
