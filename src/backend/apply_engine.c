@@ -54,6 +54,12 @@
 #define SEL_COUNT_OFF          0x88         /* selObj+0x88 -> selected-id count */
 #define ENT_XFORM_OFF          0x288        /* entity+0x288 -> 3x4 transform: [0..2] translation, [3..11] basis */
 #define ENT_DIRTY_OFF          0x160        /* entity+0x160 -> transform dirty flags (|= 3 forces a re-render) */
+#define ED_CAMERA_ORIGIN_OFF   0x170        /* editor+0x170 -> camera origin vec3 (the spawn ray start) */
+#define ED_CAMERA_ANGLES_OFF   0x17c        /* editor+0x17c -> camera {pitch,yaw} (ViewForward input) */
+#define PREFAB_GRABDIST_OFF    0x24         /* staging+0x24 -> the staged prefab's grab DISTANCE (spawn = origin+fwd*dist) */
+#define MOD_TBL_STRIDE         0x98         /* module-transform table entry stride (E = *(lm+0x750) + m*0x98) */
+#define MOD_TBL_VALID_OFF      0x30         /* tableEntry+0x30 -> module present/valid (nonzero) */
+#define MOD_OBB_OFF            0xa0         /* moduleObj+0xa0 -> module-local OBB (6 floats: min[0..2], max[3..5]) */
 #define ARR_ENT_ARRAY_OFF      0x6a0        /* arrObj+0x6a0 -> entity-ptr array (8-byte entries) */
 #define ARR_ENT_COUNT_OFF      0x6a8        /* arrObj+0x6a8 -> entity count (u32) */
 #define ENT_VALID_OFF          0x8          /* entity[id]+8 != 0 => valid; ALSO the clone base (ent+8) */
@@ -95,6 +101,9 @@
                                             * RE'd DIRECT from our own decompile. */
 #define WORLD_TO_LOCAL_RVA     0x5a8be0u   /* WorldToModuleLocal FUN_1405a8be0 (world->module-local re-base for the
                                             * birth-in-module SPAWN); sig-resolved ("WorldToModuleLocal"), RVA fallback. */
+#define VIEW_FORWARD_RVA       0x1a6ac60u  /* ViewForward FUN_141a6ac60 -- camera aim dir from editor+0x17c angles */
+#define MODULE_CONTAIN_XFORM_RVA 0x5546b0u /* ModuleContainTransform FUN_1405546b0 -- world->module-local (OBB frame) */
+#define SEG_VS_AABB_RVA        0x1a60c20u  /* SegVsAabb FUN_141a60c20 -- segment/point vs module OBB */
 
 /* ============================================================ apply-chain struct sizes ============== */
 /* DIRECT from the XINPUT1_3 FUN_180004b80 / FUN_180004950 / FUN_1800044a0 decompiles + the engine ctors
@@ -159,6 +168,9 @@ typedef char  (*prefab_populate_fn)(void *self, void *editor);                  
 typedef void  (*prefab_dtor_fn)(void *self);                                          /* PrefabDtor 0x51d870 */
 typedef void  (*paste_instantiate_fn)(void *staging, void *editor);                   /* PasteInstantiate 0x54f950 */
 typedef void *(*world_to_local_fn)(void *modtbl, float *out, int mi, const float *world); /* WorldToModuleLocal 0x5a8be0 */
+typedef float *(*view_forward_fn)(const void *angles, float *out);                        /* ViewForward 0x1a6ac60 */
+typedef void  (*module_contain_xform_fn)(const void *tblEntry, float *out, const float *world); /* ModuleContainTransform 0x5546b0 */
+typedef char  (*seg_vs_aabb_fn)(const float *aabb6, const float *a, const float *b);      /* SegVsAabb 0x1a60c20 */
 
 /* ============================================================ module state (resolved once) ========== */
 static const uint8_t      *g_doom_base   = NULL;
@@ -185,6 +197,9 @@ static prefab_populate_fn  g_prefab_populate = NULL;
 static prefab_dtor_fn      g_prefab_dtor     = NULL;
 static paste_instantiate_fn g_paste_instantiate = NULL;  /* create-from-scratch SPAWN: place staged prefab */
 static world_to_local_fn   g_world_to_local = NULL;      /* world->module-local re-base for the birth-in-module SPAWN */
+static view_forward_fn     g_view_forward = NULL;        /* camera aim direction (spatial spawn-module resolve) */
+static module_contain_xform_fn g_module_contain_xform = NULL; /* world->module-local for OBB containment */
+static seg_vs_aabb_fn      g_seg_vs_aabb = NULL;         /* point/segment-in-module-OBB test */
 static volatile LONG       g_installed   = 0;
 static volatile LONG       g_cmd_registered = 0;   /* clone_bss_apply registered once (lazy) */
 
@@ -569,17 +584,74 @@ static int ae_id_module_index(const uint8_t *lm, uint32_t id)
     return (instIdx >= 0 && instIdx < modCnt) ? instIdx : -1;   /* instIdx == modCnt => global */
 }
 
-/* the module a create-from-scratch SPAWN should belong to. The SPAWN path fires only when nothing is selected,
- * so the new entity lands at the camera inside the module being edited. Best-effort source, in order: a
- * single-module map has exactly one module (index 0); otherwise the last looked-at entity's module (the cursor
- * sits over the module being worked in); otherwise -1 => leave it global. A wrong/absent module only affects
- * the organizational bucket + the ID label, never correctness (the transform is world-absolute either way). */
+/* Which module contains a WORLD point -- the engine's own placement test, replicated (editor pick FUN_14059a520):
+ * iterate the module transform table (stride 0x98, count lm+0x758), transform the point into each module's local
+ * OBB frame (ModuleContainTransform), and point-test it against the module OBB at modObj+0xa0 (SegVsAabb a==b).
+ * Returns the module index, or -1 (outside all modules => global). SEH-guarded per module; the engine calls run
+ * inside the guard, so a bad offset falls through to -1, never a crash. No-op (-> -1) unless both engine fns resolved. */
+static int ae_module_containing_world(const void *lm, const float world[3])
+{
+    if (!g_module_contain_xform || !g_seg_vs_aabb) return -1;
+    int modCnt = 0;
+    void *tblBase = NULL;
+    if (!ae_read_u32_safe((const uint8_t *)lm + LM_INSTANCES_CNT_OFF, &modCnt) || modCnt <= 0) return -1;
+    if (!ae_read_ptr((const uint8_t *)lm + LM_MODXFORM_OFF, &tblBase) || tblBase == NULL) return -1;
+    for (int m = 0; m < modCnt && m < 256; m++) {
+        const uint8_t *E = (const uint8_t *)tblBase + (size_t)m * MOD_TBL_STRIDE;
+        void *p1 = NULL, *modObj = NULL;
+        if (!ae_read_ptr(E, &p1) || p1 == NULL) continue;             /* *(E) */
+        if (!ae_read_ptr(p1, &modObj) || modObj == NULL) continue;    /* modObj = *(*(E)) */
+        int hit = 0;
+        __try {
+            if (*(const volatile char *)(E + MOD_TBL_VALID_OFF) != 0) {
+                float local[3] = { 0.0f, 0.0f, 0.0f };
+                g_module_contain_xform((const void *)E, local, world);   /* world -> module-m-local */
+                if (g_seg_vs_aabb((const float *)((const uint8_t *)modObj + MOD_OBB_OFF), local, local))
+                    hit = 1;                                             /* point inside module m's OBB */
+            }
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) { hit = 0; }
+        if (hit) return m;
+    }
+    return -1;   /* outside all modules -> global */
+}
+
+/* The world point the create-from-scratch SPAWN lands at, matching PasteInstantiate: camera origin (editor+0x170)
+ * plus the view forward (ViewForward on editor+0x17c) times the staged prefab's grab distance (staging+0x24). The
+ * prefab MUST already be staged (ae_mkcmd_one ran). Returns 1 + fills out[3] on success. SEH-guarded. */
+static int ae_compute_grab_point(const uint8_t *ed, float out[3])
+{
+    if (!g_view_forward) return 0;
+    __try {
+        float fwd[3] = { 0.0f, 0.0f, 0.0f };
+        g_view_forward((const void *)(ed + ED_CAMERA_ANGLES_OFF), fwd);
+        const float *cam = (const float *)(ed + ED_CAMERA_ORIGIN_OFF);
+        float dist = *(const float *)(ed + PASTE_STAGING_OFF + PREFAB_GRABDIST_OFF);
+        out[0] = cam[0] + fwd[0] * dist;
+        out[1] = cam[1] + fwd[1] * dist;
+        out[2] = cam[2] + fwd[2] * dist;
+        return 1;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+}
+
+/* the module a create-from-scratch SPAWN should belong to. Module membership is SPATIAL (there is no stored
+ * "active module"), so resolve it from WHERE the entity spawns: the camera-aim grab point -> the module whose OBB
+ * contains it (exactly how native placement decides). Order: single-module map -> 0; else the spatial pick; else
+ * the last looked-at entity's module (a cheap corroborator); else -1 => leave it GLOBAL (always save-safe). A
+ * wrong/absent module only affects the organizational bucket + ID label, never correctness (position is re-based
+ * to whichever bucket M it lands in). */
 static int ae_active_module_for_spawn(const uint8_t *ed, const void *lm)
 {
     int modCnt = 0;
     if (!ae_read_u32_safe((const uint8_t *)lm + LM_INSTANCES_CNT_OFF, &modCnt) || modCnt <= 0) return -1;
     if (modCnt == 1) return 0;                          /* single-module map: the only module */
-    void *sel = NULL;
+    float grab[3];
+    if (ae_compute_grab_point(ed, grab)) {              /* SPATIAL: the module the spawn point lands in */
+        int m = ae_module_containing_world(lm, grab);
+        if (m >= 0) return m;
+    }
+    void *sel = NULL;                                   /* fallback: the last looked-at entity's module */
     if (ae_read_ptr(ed + ED_SEL_OBJ_OFF, &sel) && sel) {
         int hov = -1;
         if (ae_read_u32_safe((const uint8_t *)sel + SEL_HOVERED_OFF, &hov) && hov >= 0)
@@ -946,6 +1018,9 @@ int sh_apply_engine_install(const sig_result *results, size_t n, const uint8_t *
      * fallback baked into the sig DB; the RVA fallback below covers a clean scan-miss on this build. */
     g_paste_instantiate = (paste_instantiate_fn) sig_addr_by_name(results, n, "PasteInstantiate");
     g_world_to_local    = (world_to_local_fn)    sig_addr_by_name(results, n, "WorldToModuleLocal");
+    g_view_forward      = (view_forward_fn)      sig_addr_by_name(results, n, "ViewForward");
+    g_module_contain_xform = (module_contain_xform_fn) sig_addr_by_name(results, n, "ModuleContainTransform");
+    g_seg_vs_aabb       = (seg_vs_aabb_fn)       sig_addr_by_name(results, n, "SegVsAabb");
 
     /* the prefab-from-selection serialize engine fns (+0xb0). These jumptable/inline-prone leaves
      * resolve by FALLBACK RVA off module_base (re-derive-tagged like the editor singleton); a wrong/shifted
@@ -958,6 +1033,9 @@ int sh_apply_engine_install(const sig_result *results, size_t n, const uint8_t *
             g_paste_instantiate = (paste_instantiate_fn)(module_base + PASTE_INSTANTIATE_RVA);
         if (!g_world_to_local)      /* sig scan missed -> this-build RVA fallback (re-derive-tagged) */
             g_world_to_local = (world_to_local_fn)(module_base + WORLD_TO_LOCAL_RVA);
+        if (!g_view_forward)        g_view_forward = (view_forward_fn)(module_base + VIEW_FORWARD_RVA);
+        if (!g_module_contain_xform) g_module_contain_xform = (module_contain_xform_fn)(module_base + MODULE_CONTAIN_XFORM_RVA);
+        if (!g_seg_vs_aabb)         g_seg_vs_aabb = (seg_vs_aabb_fn)(module_base + SEG_VS_AABB_RVA);
     }
 
     char line[256];

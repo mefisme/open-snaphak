@@ -379,6 +379,27 @@ const sig_entry BACKEND_ENGINE_SIGNATURES[] = {
                              * [rcx+8]; jnz). Re-derive per build: decompile FUN_1405a8be0. */
       "53 48 83 EC 20 48 8B DA 48 8B D1 44 3B 41 08 75 19",
       0x5A8BE0u },
+    { "ViewForward", /* FUN_141a6ac60 -- camera aim direction from the editor view angles: float*(*)(const
+                      * float angles[2] = editor+0x17c {pitch,yaw}, float out[3]). out = spherical->cartesian unit
+                      * forward (cos/sin of pitch*scale, yaw*scale). PasteInstantiate uses it to place the spawn at
+                      * camOrigin + forward*grabDistance; the clone reuses it to compute the spawn point for the
+                      * spatial module pick. 23-byte zero-wildcard prologue. Re-derive: decompile FUN_141a6ac60. */
+      "53 48 83 EC 50 0F 29 74 24 40 48 8B DA 0F 29 7C 24 30 F3 0F 10 79 04",
+      0x1A6AC60u },
+    { "ModuleContainTransform", /* FUN_1405546b0 -- world -> module-LOCAL for OBB containment: void(*)(const void*
+                                 * tableEntry = *(lm+0x750)+m*0x98, float out[3], const float world[3]). DISTINCT from
+                                 * WorldToModuleLocal 0x5a8be0 (the re-base transform) -- this one applies an extra
+                                 * FUN_141a82c70 on the module matrix (the OBB frame). Paired with the module OBB at
+                                 * modObj+0xa0. Re-derive: decompile FUN_1405546b0 (it is the transform the editor pick
+                                 * FUN_14059a520 feeds into the AABB test). */
+      "48 89 5C 24 18 57 48 81 EC C0 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 B0 00 00 00 F2 0F 10 41 0C",
+      0x5546B0u },
+    { "SegVsAabb", /* FUN_141a60c20 -- segment-vs-AABB SAT test: bool(*)(const float aabb6[6] {min[0..2],max[3..5]},
+                    * const float a[3], const float b[3]). With a==b it is point-in-AABB. The clone tests the
+                    * module-local spawn point against each module's OBB (modObj+0xa0) to resolve the spawn module.
+                    * Re-derive: decompile FUN_141a60c20. */
+      "48 8B C4 48 81 EC A8 00 00 00 F3 0F 10 05 ?? ?? ?? ?? F3 0F 10 49 0C F3 0F 58 09",
+      0x1A60C20u },
     { "ConnectOutputCreator", /* FUN_140cdbb40 -- the editor wire tool's connect creator (a vtable-dispatched
                                * FSM leaf reached on the target pick). wiring_mode.c inline-detours it (Hook 2
                                * of the interactive wire-any mode): in wire-mode it records the target into the
