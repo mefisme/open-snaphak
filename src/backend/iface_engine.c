@@ -84,6 +84,23 @@
 #define LM_INSTANCES_CNT_OFF   0x758        /* loaded-map+0x758 -> instances(modules) COUNT (== the no-module sentinel) */
 #define ENT_VALID_OFF          0x8          /* entity[id]+8 != 0 => valid (the +0x28 rule) */
 #define ENT_DEFSUB_OFF         0x158        /* entity[id]+0x158 -> def sub-object */
+
+/* dev-layer visibility gate (DIRECT, live build DOOMx64vk.exe.unpacked.exe). The SnapMap editor gates entity
+ * visibility on the `snapEdit_enableDevLayer` cvar via a per-entity LAYER BITMASK:
+ *   activeMask = enableDevLayer ? (devLayerMask|1) : 1;  entity visible iff (entity->layerBits & activeMask).
+ * (engine pick paths FUN_14059a520 / FUN_14059b160 + the cvar change-callback FUN_140522eb0.) The clone mirrors
+ * it for its Entities/Timelines lists: hide iff (cvar off AND (layerBits & 1)==0); show-all when on.
+ * RE-DERIVE per build: xref the "snapEdit_enableDevLayer" string -> the register call's cvar obj (+0x30 is its
+ * int value); a pick fn reads `entity+0x160 & (enableDevLayer ? layersDecl+0x9c|1 : 1)`. */
+#define ENT_LAYER_BITS_OFF     0x160        /* entity[id]+0x160 -> layer bitmask (uint) */
+#define DEVL_CVAR_VALUE_OFF    0x30         /* idCVar+0x30 -> current integer value (== cvars.c value note) */
+#define DEVL_CVAR_NAME_OFF     0x40         /* idCVar+0x40 -> registered name char* (== cvars.c IDCVAR_NAME_OFF) */
+#define DEVL_CVARSYS_SLOT_RVA  0x55b7290u   /* *(module_base+RVA) -> idCVarSystemLocal* (documented fallback; the
+                                             * portable CmdSystemLea decode lives in cvars.c sh_resolve_cvarsys) */
+#define DEVL_CVARSYS_ARR_OFF   0x08         /* cvarSys+0x08 -> FULL idCVar** array */
+#define DEVL_CVARSYS_CNT_OFF   0x10         /* cvarSys+0x10 -> FULL count (u32) */
+#define DEVL_CVAR_LIST_CAP     100000u      /* stale-cvarSys guard */
+#define DEVL_CVAR_NAME         "snapEdit_enableDevLayer"
 #define ENT_DECL_OFF           0x8          /* *(ent+8) -> the entity's decl object (classname blob root) */
 #define DECL_BLOB_A_OFF        0x1c8        /* declObj+0x1c8 -> ... */
 #define DECL_BLOB_B_OFF        0x38         /* ...+0x38 -> the decl-SOURCE text blob ptr */
@@ -155,6 +172,8 @@ static idstr_opassign_fn  g_idstr_opassign = NULL; /* +0x128 set displayName (FU
 static decl_src_rebuild_fn g_decl_rebuild = NULL;  /* +0x40 Save-to-Decl rebuild */
 static remove_from_sel_fn g_remove_sel    = NULL;  /* +0x130 Delete */
 static get_decls_fn       g_get_decls     = NULL;  /* +0x110 enum-decls-of-resclass (GetDeclsOfType) */
+static const uint8_t     *g_module_base   = NULL;  /* cached for the dev-layer cvar read (cvarSys RVA fallback) */
+static void              *g_devlayer_cvar = NULL;  /* cached snapEdit_enableDevLayer idCVar* (lazy; dev-layer gate) */
 static volatile LONG  g_installed = 0;
 
 /* ---- SEH-guarded primitive reads (a shifted offset degrades to a clean fail, never a crash) ----- */
@@ -921,14 +940,65 @@ static int slot_resolve_prefab_path(sh_iface *self, const char *prefix, const ch
     return out_path[0] != '\0';
 }
 
+/* Lazily resolve + cache the snapEdit_enableDevLayer idCVar* by walking the cvarSys FULL list by name. Pure
+ * memory reads + strcmp -> thread-safe on the Qt UI thread. Returns NULL if unreachable (caller fail-safes to
+ * "not hidden"). cvarSys via the documented RVA fallback off the cached module base. */
+static void *resolve_devlayer_cvar(void)
+{
+    if (g_devlayer_cvar) return g_devlayer_cvar;
+    if (!g_module_base) return NULL;
+    void *cvarSys = NULL;
+    if (!ie_read_ptr(g_module_base + DEVL_CVARSYS_SLOT_RVA, &cvarSys) || cvarSys == NULL) return NULL;
+    void    *arr = NULL;
+    uint32_t cnt = 0;
+    if (!ie_read_ptr((const uint8_t *)cvarSys + DEVL_CVARSYS_ARR_OFF, &arr) || arr == NULL) return NULL;
+    if (!ie_read_u32((const uint8_t *)cvarSys + DEVL_CVARSYS_CNT_OFF, &cnt) || cnt == 0 ||
+        cnt > DEVL_CVAR_LIST_CAP) return NULL;
+    for (uint32_t i = 0; i < cnt; i++) {
+        void *cv = NULL;
+        if (!ie_read_ptr((const uint8_t *)arr + (size_t)i * 8, &cv) || cv == NULL) continue;
+        void *namep = NULL;
+        if (!ie_read_ptr((const uint8_t *)cv + DEVL_CVAR_NAME_OFF, &namep) || namep == NULL) continue;
+        __try {
+            if (strcmp((const char *)namep, DEVL_CVAR_NAME) == 0) { g_devlayer_cvar = cv; return cv; }
+        } __except (EXCEPTION_EXECUTE_HANDLER) { /* bad name ptr -> skip */ }
+    }
+    return NULL;
+}
+
+/* +0x280 (ext 3): is editor entity `id` currently HIDDEN by the dev-layer gate? 1 = hide it from the lists,
+ * 0 = show. Mirrors the engine: hide iff snapEdit_enableDevLayer==0 AND (entity->layerBits & 1)==0. Every read
+ * SEH-guarded; any fault / cvar-on / editor-down / unresolved-cvar -> 0 (never hide on uncertainty). */
+static int slot_id_dev_layer_hidden(sh_iface *self, int id)
+{
+    (void)self;
+    if (id < 0) return 0;
+    /* cvar ON -> reveal everything (no dev-layer hiding). Unresolved cvar -> fall through (fail-safe show). */
+    void *cv = resolve_devlayer_cvar();
+    if (cv != NULL) {
+        int enabled = 0;
+        if (ie_read_s32((const uint8_t *)cv + DEVL_CVAR_VALUE_OFF, &enabled) && enabled != 0) return 0;
+    }
+    void    *array = NULL;
+    uint32_t count = 0;
+    if (!entity_array(&array, &count)) return 0;
+    void *ent = entity_ptr(array, count, id);
+    if (ent == NULL) return 0;
+    uint32_t bits = 0;
+    if (!ie_read_u32((const uint8_t *)ent + ENT_LAYER_BITS_OFF, &bits)) return 0;
+    return (bits & 1u) == 0 ? 1 : 0;   /* not in the base layer -> dev-layer -> hidden when the cvar is off */
+}
+
 /* ================================================================ install ========================== */
 
 int sh_iface_engine_install(const sig_result *results, size_t n, const uint8_t *module_base)
 {
     if (InterlockedCompareExchange(&g_installed, 1, 0) != 0) return 0;   /* one-shot */
 
-    if (module_base)
+    if (module_base) {
         g_editor = module_base + EDITOR_SINGLETON_RVA;   /* recipe-tagged data RVA (inline ctor 0x51A8E0; see the #define) */
+        g_module_base = module_base;                     /* for the dev-layer cvar read (cvarSys RVA fallback) */
+    }
 
     g_add_sel    = (add_to_sel_fn)sig_addr_by_name(results, n, "AddToSelection");
     g_clear_sel  = (clear_sel_fn)sig_addr_by_name(results, n, "ClearSelection");
@@ -979,6 +1049,8 @@ int sh_iface_engine_install(const sig_result *results, size_t n, const uint8_t *
     slots.enum_valid_classes     = slot_enum_valid_classes;   /* +0x270 ext 1 */
     /* clone-extension: the inherit-dropdown enumerator (the complete entityDef set). */
     slots.enum_inherits          = slot_enum_inherits;        /* +0x278 ext 2 */
+    /* clone-extension: the dev-layer entity-hidden query (Entities/Timelines list filter). */
+    slots.id_dev_layer_hidden    = slot_id_dev_layer_hidden;  /* +0x280 ext 3 */
     /* fold in the heavy apply-chain slots (serialize entity +0xc8 / schedule-apply +0xd0 /
      * read-prefab +0xb8). sh_apply_engine_install must have run first (dllmain orders it before this) so
      * its engine fns are resolved; the slot bodies themselves null-check + degrade if a dep is missing. */

@@ -252,6 +252,14 @@ static void populate_one_entity(ShWinController *win, sh_iface *iface, int id)
     /* skip placeholder/builtin slots whose id-string starts "NULL_" (OG: *(idstr)==0x4c4c554e && [4]=='_'). */
     if (idStr.size() >= 5 && idStr.compare(0, 5, "NULL_") == 0) return;
 
+    /* DEV-LAYER filter: skip entities the SnapMap editor hides while `snapEdit_enableDevLayer` is 0 (the
+     * dev-layer content that shows as "(no module)") -- from BOTH the Entities list AND the Timelines list.
+     * The user reveals them by setting `snapEdit_enableDevLayer 1` (then Refresh). Backend gate (+0x280): a
+     * raw per-entity layer-bit read, thread-safe; an absent/faulting slot -> no filtering (fail-safe show). */
+    if (iface && iface->vtbl && iface->vtbl->id_dev_layer_hidden &&
+        iface->vtbl->id_dev_layer_hidden(iface, id))
+        return;
+
     std::string cls = iface_classname(iface, id);
 
     /* dual-add idTarget_Timeline / idEncounterManager into the Timelines list (OG quirk). */

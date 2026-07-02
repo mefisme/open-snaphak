@@ -272,6 +272,8 @@ void sh_iface_bind_engine_slots(const sh_iface_engine_slots *s)
     g_iface_vtbl_live.enum_valid_classes     = s->enum_valid_classes;     /* +0x270 */
     /* clone-extension (the inherit-dropdown enumerator). */
     g_iface_vtbl_live.enum_inherits          = s->enum_inherits;          /* +0x278 */
+    /* clone-extension (the dev-layer entity-hidden query). */
+    g_iface_vtbl_live.id_dev_layer_hidden    = s->id_dev_layer_hidden;    /* +0x280 */
 }
 
 /* --------------------------------------------------------------------- the factory -----------------

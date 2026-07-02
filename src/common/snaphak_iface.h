@@ -155,6 +155,15 @@ typedef int          (*sh_enum_valid_classes_fn)(struct sh_iface *self, const ch
 typedef int          (*sh_enum_inherits_fn)(struct sh_iface *self,
                                             char *out_buf, int cap, int *out_count);               /* +0x278 (ext 2) */
 
+/* +0x280 (clone-extension slot 3) DEV-LAYER visibility query for an editor entity id. The SnapMap editor
+ * hides "dev layer" entities unless the `snapEdit_enableDevLayer` cvar is 1: an entity is visible iff
+ * (entity->layerBits & activeMask) != 0, with activeMask = enableDevLayer ? (devLayerMask|1) : 1 (the
+ * engine's own pick/visibility gate). This slot returns 1 iff the entity is currently HIDDEN by that gate
+ * (cvar off AND the entity is not in the base layer) -- the Entities + Timelines lists skip those, so they
+ * match what the editor shows. Returns 0 when the cvar is on, a read faults, or the editor is down
+ * (fail-safe: never hide on uncertainty). A raw layer-bit read -> thread-safe on the Qt UI thread. */
+typedef int          (*sh_id_dev_layer_hidden_fn)(struct sh_iface *self, int id);                /* +0x280 (ext 3) */
+
 /* ------------------------------------------------------------------ heavy apply slots --------
  * The heavy serialize/deserialize/apply slots the SnapStack APPLY-ops (bss/bsi/bsf/bsb/bse/accl/
  * acctargets/mkcmd) need. These are the native port of the reference implementation's +0xc8 serialize / +0xd0 deserialize-
@@ -323,6 +332,7 @@ typedef struct sh_iface_vtbl {
     sh_apply_class_inherit_fn apply_class_inherit;   /* +0x268 (ext 0) ATOMIC class+inherit set */
     sh_enum_valid_classes_fn  enum_valid_classes;    /* +0x270 (ext 1) class-dropdown enumerator */
     sh_enum_inherits_fn       enum_inherits;         /* +0x278 (ext 2) inherit-dropdown enumerator */
+    sh_id_dev_layer_hidden_fn id_dev_layer_hidden;   /* +0x280 (ext 3) dev-layer entity-hidden query */
 } sh_iface_vtbl;
 
 /* ------------------------------------------------------------------ the interface object -----------
@@ -442,6 +452,8 @@ typedef struct sh_iface_engine_slots {
     sh_enum_valid_classes_fn     enum_valid_classes;    /* +0x270 (ext 1) */
     /* clone-extension: the inherit-dropdown enumerator. */
     sh_enum_inherits_fn          enum_inherits;         /* +0x278 (ext 2) */
+    /* clone-extension: the dev-layer entity-hidden query. */
+    sh_id_dev_layer_hidden_fn    id_dev_layer_hidden;   /* +0x280 (ext 3) */
 } sh_iface_engine_slots;
 
 void sh_iface_bind_engine_slots(const sh_iface_engine_slots *slots);
