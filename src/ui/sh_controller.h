@@ -158,6 +158,13 @@ struct ShWinController {
                                           * A DELETE lowers this while last_entity_count is unchanged -> the poll
                                           * rebuilds so a deleted entity (e.g. a timeline) drops out of the Entities
                                           * + Timelines lists instead of lingering as a stale, openable row. */
+    uint64_t      last_world_sig = 0;    /* FNV-1a hash of EVERY valid entity's id-string (embeds class + MODULE
+                                          * path), folded into the same valid-count poll loop. A module RE-BUCKET
+                                          * (an object dragged between modules), a reclass, or a module create/
+                                          * delete changes an entity's id-string WITHOUT changing entity_count or
+                                          * valid_count -> the count/valid triggers miss it and the list stays stale
+                                          * until a manual Refresh. A change in this hash forces a rebuild so live
+                                          * game interaction (moves between modules, module add/remove) is reflected. */
     int           spawn_rebuild_frames = 0; /* QOL: a from-scratch timeline SPAWN places the entity on the game
                                           * thread (deferred) + its className resolves a beat later, so the
                                           * one-shot count-poll can rebuild before the new entity reads as a

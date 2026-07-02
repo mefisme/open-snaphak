@@ -572,7 +572,15 @@ static void entity_state_read_sync(ShWinController *win)
                   * note), so recomputing it each frame for the ONE selected entity is negligible, and the read-only
                   * widget is touched only on an actual change (id, class, OR module). */
         QString live = QString::fromStdString(iface_id_string(iface, id));   /* read-only; embeds class + module */
-        if (idl->text() != live) idl->setText(live);
+        if (idl->text() != live) {
+            /* The SAME selected entity's id-string changed -- a module RE-BUCKET (drag into a module) or a class
+             * morph, neither of which changes the id or trips the entity-count poll. So the ENTITY LIST's label is
+             * now stale (still shows "(no module)" / the old module) even though this inspector field updated. Flag
+             * a list rebuild so the list re-reads the module too. Gated on !id_changed: a plain selection change
+             * (different entity) needs no list rebuild. */
+            if (!id_changed) win->flagword |= SH_FLAG_REBUILD_LIST;
+            idl->setText(live);
+        }
     }
 
     /* GRAY-OUT: disable "Save to Decl" when the panel has NO unsaved edits -- every editable widget already
@@ -852,15 +860,33 @@ void sh_dispatch_flagword(ShWinController *win)
      * freed slot stays (ids are stable indices into arrObj+0x6a8), so a deleted entity would linger in the
      * Entities + Timelines lists as a stale, openable row (the reported timeline-stability bug). So ALSO track the
      * count of VALID entities: a delete lowers it while the raw count is unchanged -> rebuild, and populate_one_entity
-     * skips the now-invalid id, dropping the dead entity from both lists. Both change-gated -> once per change. */
+     * skips the now-invalid id, dropping the dead entity from both lists. And ALSO hash every valid entity's
+     * id-string (which embeds class + MODULE path): an object dragged between modules, a reclass, or a module
+     * add/remove changes that hash while BOTH counts stay put -> the list re-reads it too. All three change-gated
+     * -> once per change (no rebuild while the world is static). */
     {
         int cnt = iface_entity_count(iface);
         int valid = 0;
-        for (int id = 0; id < cnt; id++)
-            if (iface_is_valid_id(iface, id)) valid++;
-        if (cnt != win->last_entity_count || valid != win->last_valid_count) {
+        uint64_t sig = 1469598103934665603ULL;   /* FNV-1a 64 offset basis */
+        for (int id = 0; id < cnt; id++) {
+            if (!iface_is_valid_id(iface, id)) continue;
+            valid++;
+            /* Fold each valid entity's id-string (embeds class + MODULE path) into a rolling hash so a change
+             * that DOESN'T move entity_count/valid_count still rebuilds the list: an object dragged between
+             * modules, a reclass, a module add/remove. id_to_string is an O(1) struct-walk; a stack buffer keeps
+             * this alloc-free even scanning the whole map each tick, and the backend SEH-guards the slot body. */
+            if (iface && iface->vtbl && iface->vtbl->id_to_string) {
+                char b[512]; b[0] = '\0';
+                const char *s = iface->vtbl->id_to_string(iface, id, b, (int)sizeof(b));
+                if (s) for (const unsigned char *p = (const unsigned char *)s; *p; ++p) {
+                    sig ^= *p; sig *= 1099511628211ULL;
+                }
+            }
+        }
+        if (cnt != win->last_entity_count || valid != win->last_valid_count || sig != win->last_world_sig) {
             win->last_entity_count = cnt;
             win->last_valid_count  = valid;
+            win->last_world_sig    = sig;
             win->flagword |= SH_FLAG_REBUILD_LIST;
         }
     }
