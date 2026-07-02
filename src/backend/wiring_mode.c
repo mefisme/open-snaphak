@@ -54,16 +54,14 @@
 #define SIG_OUTPUT_CREATOR   "ConnectOutputCreator"   /* 0xcdbb40 -- Hook 2: the creator (base-entity src) */
 #define SIG_OUTPUT_CREATOR1  "WireConnectCreator1"    /* 0xcdb990 -- Hook 3: the creator (output-node src)  */
 
-/* The pick-reclaim primitives the ON toggle calls to convert an in-progress pick into a clean wire-any
- * cycle (see h_wiring_mode). Each is void(tool, editor), reads only the editor (never a context object),
- * and self-guards on its own tool flag -- calling one whose flag is clear is a no-op. The first three are
- * essential (the sanitize needs them); the last two clear only a cosmetic highlight bitmask bit and are
- * best-effort. RE-DERIVE per DOOM build: decompile each RVA below. */
+/* The pick-reclaim primitive the ON toggle calls to convert an in-progress pick into a clean wire-any
+ * cycle (see h_wiring_mode). It is void(tool, editor), reads only the editor (never a context object), and
+ * self-guards on its own tool flag -- calling it when its flag is clear is a no-op. The sanitize FREES NO
+ * entity: it removes only the tracked preview edge (this primitive) and re-arms; the auto-created nodes are
+ * deliberately left as live orphans (deleting a node mid-pick frees it under a still-live incoming edge,
+ * which the per-frame editor draw pass then faults dereferencing -- see h_wiring_mode). Its absence is
+ * non-fatal (an unremoved preview edge is benign). RE-DERIVE per DOOM build: decompile the RVA below. */
 #define SIG_UNDO_PREV        "WireUndoPrev"           /* 0xcd9a90 -- remove the current preview edge     */
-#define SIG_DEL_LISTENER     "WireDelListenerNode"    /* 0xcda210 -- delete the auto-created listener node (slot1) */
-#define SIG_DEL_ACTION       "WireDelActionNode"      /* 0xcda2b0 -- delete the auto-created action node (slot3)   */
-#define SIG_CLR_MARK2        "WireClrMark2"           /* 0xcdbe00 -- clear the slot2 highlight bit (optional) */
-#define SIG_CLR_MARK1        "WireClrMark1"           /* 0xcdbe40 -- clear the slot1 highlight bit (optional) */
 
 /* Whole, position-independent prologue bytes each detour installer steals. Both leaves' prologues land on
  * an instruction boundary at 15 bytes (0xcdaa30 = 2 reg-save MOVs + push + sub rsp; 0xcdbb40 = 3 reg-save
@@ -103,11 +101,7 @@ static volatile LONG  g_wire_mode   = 0;     /* the toggle (0 = off by default) 
 static output_state_fn   g_orig_output_state   = NULL;  /* trampoline to the original output-select leaf */
 static output_creator_fn g_orig_output_creator = NULL;  /* trampoline to the original creator (base-entity src) */
 static output_creator_fn g_orig_output_creator1 = NULL; /* trampoline to the original creator (output-node src) */
-static wire_reclaim_fn   g_undo_prev           = NULL;  /* remove the current preview edge (essential; may be 0) */
-static wire_reclaim_fn   g_del_listener        = NULL;  /* delete the auto-created listener node (essential; may be 0) */
-static wire_reclaim_fn   g_del_action          = NULL;  /* delete the auto-created action node (essential; may be 0) */
-static wire_reclaim_fn   g_clr_mark2           = NULL;  /* clear slot2 highlight bit (optional; may be 0) */
-static wire_reclaim_fn   g_clr_mark1           = NULL;  /* clear slot1 highlight bit (optional; may be 0) */
+static wire_reclaim_fn   g_undo_prev           = NULL;  /* remove the current preview edge (free-safe; may be 0) */
 static void             *g_last_tool           = NULL;  /* the live tool object (captured at the TOP of every hook) */
 
 /* ---- helpers ------------------------------------------------------------------------------------ */
@@ -124,10 +118,10 @@ static int wm_resolve_sig(const char *name, sig_result *out)
     return 0;
 }
 
-/* Drop the resolved pick-reclaim function pointers (used on a detour-install rollback). */
+/* Drop the resolved pick-reclaim function pointer (used on a detour-install rollback). */
 static void wm_clear_reclaim(void)
 {
-    g_undo_prev = g_del_listener = g_del_action = g_clr_mark2 = g_clr_mark1 = NULL;
+    g_undo_prev = NULL;
 }
 
 /* ---- Hook 1: the output-select FSM leaf --------------------------------------------------------- */
@@ -242,15 +236,11 @@ void sh_wiring_mode_install(const uint8_t *module_base)
         return;
     }
 
-    /* The pick-reclaim primitives (called, not detoured; used only by the ON toggle to sanitize an
-     * in-progress pick). Best-effort resolve -- their absence does not block arming; the ON toggle
-     * refuses an in-flight sanitize gracefully if any of the three essential ones is missing. */
+    /* The pick-reclaim primitive (called, not detoured; used only by the ON toggle to sanitize an
+     * in-progress pick). Best-effort resolve -- its absence does not block arming; the sanitize simply
+     * skips the preview-edge removal (a benign leftover) and still re-arms. */
     sig_result r;
-    if (wm_resolve_sig(SIG_UNDO_PREV,    &r) && r.status == SIG_OK) g_undo_prev    = (wire_reclaim_fn)r.addr;
-    if (wm_resolve_sig(SIG_DEL_LISTENER, &r) && r.status == SIG_OK) g_del_listener = (wire_reclaim_fn)r.addr;
-    if (wm_resolve_sig(SIG_DEL_ACTION,   &r) && r.status == SIG_OK) g_del_action   = (wire_reclaim_fn)r.addr;
-    if (wm_resolve_sig(SIG_CLR_MARK2,    &r) && r.status == SIG_OK) g_clr_mark2    = (wire_reclaim_fn)r.addr;
-    if (wm_resolve_sig(SIG_CLR_MARK1,    &r) && r.status == SIG_OK) g_clr_mark1    = (wire_reclaim_fn)r.addr;
+    if (wm_resolve_sig(SIG_UNDO_PREV, &r) && r.status == SIG_OK) g_undo_prev = (wire_reclaim_fn)r.addr;
 
     /* Install all three (off-by-default) detours. If any fails, roll the prior ones back -- no half-state. */
     void *tramp_state = sh_install_detour_sig(&rs, (void *)wire_output_state_detour, WIRING_STOLEN);
@@ -291,13 +281,17 @@ void h_wiring_mode(struct idCmdArgs *a)
     }
     if (!g_wire_mode) {
         /* ON toggle. If a wire pick is already in flight in the Add-Logic tool (the user held a wire, then
-         * flipped the mode ON), convert it in place into a clean wire-any cycle: keep the source, reclaim
-         * the in-progress preview edge + the auto-created nodes, then re-arm to target-select -- so the
-         * held wire seamlessly becomes a wire-any wire. Refuse ONLY the modal output-node picker sub-state
+         * flipped the mode ON), convert it in place into a clean wire-any cycle: keep the source, remove the
+         * in-progress preview edge, then re-arm to target-select -- so the held wire seamlessly becomes a
+         * wire-any wire. Do NOT delete the auto-created nodes: deleting a node frees it and sentinels its
+         * entity-table slot while removing only the node's OUTGOING edges, so a still-live INCOMING edge
+         * (source -> node) dangles and the per-frame editor graph/draw pass faults dereferencing the freed
+         * slot at +0x3c8. The field-reset instead clears the tool's node flags, leaving the nodes as
+         * harmless live orphans that nothing ever frees. Refuse ONLY the modal output-node picker sub-state
          * (there is no traced way to dismiss its pushed UI screen without a ghost modal). CRITICAL: never
          * zero the tool's think-state (+0x28) while it is active -- a 0 think with the tool still capturing
          * swallows all input including escape. */
-        int refuse = 0;   /* 0 = arm; 1 = modal picker open; 2 = reclaim primitives unavailable */
+        int refuse = 0;   /* 0 = arm; 1 = modal output-node picker open (the one narrow refuse) */
         void *t  = g_last_tool;
         void *ed = (g_module_base != NULL) ? (void *)(g_module_base + EDITOR_SINGLETON_RVA) : NULL;
 
@@ -308,50 +302,52 @@ void h_wiring_mode(struct idCmdArgs *a)
 
             if (modal) {
                 refuse = 1;                                  /* the one narrow refuse */
-            } else if (think != 0) {                         /* a pick is in flight -> sanitize it in place */
-                if (g_undo_prev && g_del_listener && g_del_action) {
-                    int src = *(int *)(b + TOOL_FSM_ANCHOR_OFF);   /* 0x08 -- the source, preserved all pick */
+            } else if (think != 0) {                         /* a pick is in flight -> convert it in place */
+                /* Capture the pre-sanitize source-type + anchors BEFORE any mutation (the preview-edge
+                 * removal can null slot 0x14). */
+                int creator_sel = *(int *)(b + TOOL_CREATOR_OFF);    /* 0x20: 1 = output-node source; else base */
+                int src_base    = *(int *)(b + TOOL_FSM_ANCHOR_OFF); /* 0x08: the base source anchor            */
+                int src_out     = *(int *)(b + TOOL_SLOT1_OFF);      /* 0x14: the output-node source (recorded here) */
 
-                    /* (1) reclaim via the engine's own self-guarding primitives (each no-ops if its own
-                     *     flag is clear), in the engine's own cancel order (edge, then highlight bits, then
-                     *     the auto-created nodes): */
-                    g_undo_prev(t, ed);                            /* remove the current preview edge */
-                    if (g_clr_mark2) g_clr_mark2(t, ed);           /* clear slot2 highlight bit (optional) */
-                    if (g_clr_mark1) g_clr_mark1(t, ed);           /* clear slot1 highlight bit (optional) */
-                    g_del_listener(t, ed);                         /* delete the auto-created listener node (slot1) */
-                    g_del_action(t, ed);                           /* delete the auto-created action node (slot3) */
+                /* (1) Remove ONLY the tracked preview edge. WireUndoPrev is FREE-SAFE (it frees no entity,
+                 *     only toggles the edge/dirty state) and self-guards on the undo class. Deliberately do
+                 *     NOT delete the auto-created nodes -- freeing a node under a still-live incoming edge is
+                 *     exactly what the per-frame draw pass faults on (see the block comment above). Freeing
+                 *     nothing keeps every entity-table slot valid, so that fault is impossible. */
+                if (g_undo_prev) g_undo_prev(t, ed);               /* remove the tracked preview edge (frees nothing) */
 
-                    /* (2) field-reset -- MIRRORS the engine tool-reset EXCEPT +0x24 is a 4-BYTE zero, so
-                     *     +0x28 (think) SURVIVES. The engine's own reset does an 8-byte +0x24 store that
-                     *     also zeroes think -- that is the input-death we must avoid. The +0x0e/+0x38/+0x40/
-                     *     +0x48/+0x54 literals mirror the engine tool-reset (re-derive per build from it). */
-                    *(int *)(b + TOOL_SLOT0_OFF) = -1;  *(int *)(b + TOOL_SLOT1_OFF) = -1;
-                    *(int *)(b + TOOL_SLOT2_OFF) = -1;  *(int *)(b + TOOL_SLOT3_OFF) = -1;
-                    *(uint8_t *)(b + TOOL_FLAGS_C_OFF) &= 0x20;        /* keep only bit 0x20 */
-                    *(uint8_t *)(b + 0x0e)             &= (uint8_t)~1;
-                    *(uint8_t *)(b + TOOL_FLAGS_D_OFF)  = 0;           /* clear picker-open + node flags */
-                    *(uint64_t *)(b + 0x38) = 0; *(uint64_t *)(b + 0x40) = 0; *(uint64_t *)(b + 0x48) = 0;
-                    *(uint32_t *)(b + 0x54) = 0;
-                    *(int *)(b + TOOL_UNDOCLASS_OFF) = 0;              /* 0x24 -- 4-BYTE (think at +0x28 untouched) */
+                /* (2) field-reset -- null the chain slots + CLEAR the create/node flags (so the tool FORGETS
+                 *     any auto-created node, and nothing frees it later). MIRRORS the engine tool-reset EXCEPT
+                 *     +0x24 is a 4-BYTE zero, so +0x28 (think) SURVIVES. The engine's own reset does an 8-byte
+                 *     +0x24 store that also zeroes think -- that is the input-death we must avoid. The +0x0e/
+                 *     +0x38/+0x40/+0x48/+0x54 literals mirror the engine tool-reset (re-derive per build). */
+                *(int *)(b + TOOL_SLOT0_OFF) = -1;  *(int *)(b + TOOL_SLOT1_OFF) = -1;
+                *(int *)(b + TOOL_SLOT2_OFF) = -1;  *(int *)(b + TOOL_SLOT3_OFF) = -1;
+                *(uint8_t *)(b + TOOL_FLAGS_C_OFF) &= 0x20;        /* keep only bit 0x20 */
+                *(uint8_t *)(b + 0x0e)             &= (uint8_t)~1;
+                *(uint8_t *)(b + TOOL_FLAGS_D_OFF)  = 0;           /* clear picker-open + node flags */
+                *(uint64_t *)(b + 0x38) = 0; *(uint64_t *)(b + 0x40) = 0; *(uint64_t *)(b + 0x48) = 0;
+                *(uint32_t *)(b + 0x54) = 0;
+                *(int *)(b + TOOL_UNDOCLASS_OFF) = 0;              /* 0x24 -- 4-BYTE (think at +0x28 untouched) */
 
-                    /* (3) re-arm to the clean wire-any base target-select (Hook 1's outcome): */
-                    *(int *)(b + TOOL_SLOT0_OFF)   = src;              /* slot0 = source (preserved) */
-                    *(int *)(b + TOOL_CREATOR_OFF) = 0;                /* the direct-edge creator (Hook 2) */
-                    *(int *)(b + TOOL_THINK_OFF)   = 2;                /* target-select -- NON-ZERO => input alive */
-                } else {
-                    refuse = 2;   /* the essential reclaim primitives did not resolve on this build; refuse
-                                   * the in-flight toggle rather than half-sanitize (which would spray edges) */
+                /* (3) re-arm PRESERVING the source type. An output-node source lives in slot1 (+0x14) with
+                 *     creator-selector 1, so its target pick must route to Hook 3; a base source lives in
+                 *     slot0 (+0x10) with creator-selector 0, routing to Hook 2. Forcing creator 0 for an
+                 *     output-node source would stem the edge from the wrong (base) anchor. */
+                if (creator_sel == 1) {                            /* output-node source -> Hook 3 */
+                    *(int *)(b + TOOL_SLOT1_OFF)   = src_out;      /* slot1 = the output-node source */
+                    *(int *)(b + TOOL_CREATOR_OFF) = 1;            /* creator selector 1 = output-node creator */
+                } else {                                           /* base source -> Hook 2 */
+                    *(int *)(b + TOOL_SLOT0_OFF)   = src_base;     /* slot0 = the base source */
+                    *(int *)(b + TOOL_CREATOR_OFF) = 0;            /* creator selector 0 = base creator */
                 }
+                *(int *)(b + TOOL_THINK_OFF) = 2;                  /* target-select -- NON-ZERO => input alive */
             }
             /* think == 0: no pick in flight -> nothing to sanitize; just arm below. */
         } __except (EXCEPTION_EXECUTE_HANDLER) { refuse = 0; /* fields untouched on fault -> arm cleanly */ } }
 
         if (refuse == 1) {
             sh_printf("sh_target_any: close the output-node picker first, then enable wire-any.\n");
-            return;                                          /* stay OFF; do not arm */
-        }
-        if (refuse == 2) {
-            sh_printf("sh_target_any: finish or cancel the current wire pick before enabling wire-any.\n");
             return;                                          /* stay OFF; do not arm */
         }
         g_wire_mode = 1;
