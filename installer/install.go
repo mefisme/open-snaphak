@@ -81,10 +81,28 @@ func cmdInstall(f flags) error {
 	}
 	defer cleanup()
 
+	// Files a PREVIOUS install placed are OUR own DLLs, not vanilla -- never "back them up" on an update, or
+	// uninstall would later restore our DLL as if it were the genuine file and leave DOOM non-vanilla. Carry
+	// the earlier install's genuine backups forward so uninstall still restores them. Best-effort: no prior
+	// record (a first install) just yields empty sets.
+	ours := map[string]bool{}
+	var priorBackups []backup
+	if prior, err := loadRecord(); err == nil {
+		for _, rel := range prior.Files {
+			ours[rel] = true
+		}
+		priorBackups = prior.Backups
+	}
+
 	rec := &installRecord{
 		Version:     b.version,
 		DoomPath:    doom,
 		InstalledAt: time.Now().UTC().Format(time.RFC3339),
+		Backups:     priorBackups,
+	}
+	backedUp := map[string]bool{}
+	for _, bk := range priorBackups {
+		backedUp[bk.Rel] = true
 	}
 	// FINAL gate -- runs only after every check passed (DOOM found, DOOM closed, bundle downloaded + verified).
 	if !f.yes && isInteractive() {
@@ -96,14 +114,25 @@ func cmdInstall(f flags) error {
 	fmt.Printf("Installing SnapHak into %s\n", doom)
 	for _, e := range b.files {
 		target := filepath.Join(doom, e.rel)
-		// back up a pre-existing real file we'd overwrite (e.g. a genuine XINPUT1_3.dll)
+		// Back up only a GENUINE pre-existing file we'd overwrite (e.g. a real XINPUT1_3.dll). Skip if a
+		// previous install already attributed this path to us, or the on-disk file is byte-identical to the
+		// DLL we're about to write (also ours) -- backing either up would corrupt the vanilla-restore.
 		if st, err := os.Stat(target); err == nil && !st.IsDir() {
-			bak := target + ".snaphak-bak"
-			if _, err := os.Stat(bak); err != nil { // never clobber an existing backup
-				if err := os.Rename(target, bak); err != nil {
-					return fmt.Errorf("couldn't back up the existing %s (%v) -- check you can write to your DOOM folder (try running as administrator)", e.rel, err)
+			ourFile := ours[e.rel]
+			if !ourFile {
+				if got, herr := fileSHA256(target); herr == nil && got == e.sha256 {
+					ourFile = true
 				}
-				rec.Backups = append(rec.Backups, backup{Rel: e.rel, Backup: bak})
+			}
+			if !ourFile && !backedUp[e.rel] {
+				bak := target + ".snaphak-bak"
+				if _, err := os.Stat(bak); err != nil { // never clobber an existing backup
+					if err := os.Rename(target, bak); err != nil {
+						return fmt.Errorf("couldn't back up the existing %s (%v) -- check you can write to your DOOM folder (try running as administrator)", e.rel, err)
+					}
+					rec.Backups = append(rec.Backups, backup{Rel: e.rel, Backup: bak})
+					backedUp[e.rel] = true
+				}
 			}
 		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
