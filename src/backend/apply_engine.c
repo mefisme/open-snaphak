@@ -74,16 +74,52 @@
  * then populated from the editor via `(DAT_18003e120 + 0x54e410)(temp, editor)`; on success it is reflection-
  * serialized as "idSnapEntityPrefab" + tree-rendered to JSON. The two prefab fns are jumptable/inline-prone
  * leaves the byte-sig scanner cannot reliably anchor, so they resolve by FALLBACK RVA off g_doom_base
- * (tagged for per-build re-derive, exactly like the editor singleton). The temp-prefab struct size is taken
- * generous (the OG local_6d8 frame slot is 0x210 bytes; we alloc 0x220 zeroed). */
+ * (tagged for per-build re-derive, exactly like the editor singleton).
+ *
+ * PREFAB_TEMP_SIZE was previously 0x220, based on the OG local_6d8 frame slot (0x210 bytes) -- CONFIRMED
+ * (2026-07-06) far too small: the ctor at +0x54d0a0 writes its own fields up to ~+0x118 then makes a
+ * small forward call into a SECOND, larger ctor that keeps writing fields past +0x590 -- the real object
+ * needs at least ~0x590+ bytes, ~2.6x the old allocation. The old size was a silent stack-buffer overflow
+ * on every create-from-selection call (writes landing on valid stack memory just past our buffer -- not a
+ * clean AV, so neither the fault-shield VEH nor our own SEH guard ever caught it; this is what crashed
+ * DOOM outright). Bumped to 0x2000 for comfortable headroom over the confirmed-required size.
+ *
+ * PrefabPopulate is a 3-ARG function, not 2 -- CONFIRMED (2026-07-06). The 3rd (R8) is an out int* status/
+ * reason code the engine writes through (seen storing 1, 2, and a cleared 0 on different validation paths).
+ * Our call only ever passed 2 args, so R8 held whatever was left over from the prior call in the sequence
+ * -- an intermittent crash (write through garbage/unmapped R8, e.g. observed 0x10) at two sites inside
+ * PrefabPopulate: +0x2D7 and +0xE91. Fixed by adding the missing out-param and passing a real local's
+ * address so the write always lands somewhere harmless.
+ *
+ * Separately CONFIRMED: not hovering an entity in the selection is a REAL engine requirement, not a red
+ * herring -- with the crash fixed, status code 2 turns out to mean exactly that (the engine prints "Failed
+ * to create prefab: not hovering entity in selection." itself before returning it). So the create flow now
+ * checks the hovered-id slot (+0x198) up front (see poc_apply_create_prefab in snaphak_ui_webview.cpp)
+ * instead of relying on this out-param at all -- simpler, and gives the UI an accurate "not hovering"
+ * result instead of the generic "nothing selected". */
 #define PREFAB_CTOR_RVA        0x54d0a0u   /* idSnapEntityPrefab ctor (OG FUN_180004210 local_6d8 ctor) */
 #define PREFAB_POPULATE_RVA    0x54e410u   /* populate prefab from editor selection (returns char success) */
 #define PREFAB_DTOR_RVA        0x51d870u   /* idSnapEntityPrefab dtor (OG FUN_180004210 cleanup) */
+#define PREFAB_TEMP_SIZE       0x2000      /* was 0x220 -- confirmed too small, see comment above */
+#define PASTE_INSTANTIATE_RVA  0x54f950u   /* PasteInstantiate FUN_14054f950: void(prefab=editor+0x209a8, editor)
+                                            * -- instantiate the staged prefab into the live map + AddToSelection,
+                                            * camera-relative grab placement; does NOT consume the slot. NOT called
+                                            * by us at all (CONFIRMED 2026-07-06 against the ORIGINAL snaphakui.dll
+                                            * + XINPUT1_3.dll: neither ever calls it -- only the engine's own native
+                                            * Ctrl+V handler does, after a Copy or a prefab double-click just stages
+                                            * the text via the SAME deserialize-into-editor+0x209a8 step our own
+                                            * ae_mkcmd_one already does). Calling it ourselves skipped whatever
+                                            * grab-tool state the native handler also sets up alongside it (left a
+                                            * placed prefab undraggable + crashed on the next Play/Editor
+                                            * transition); a follow-up attempt at synthesizing a native Ctrl+V from
+                                            * our own code hit its own side effects (see backend-changes.md). Load
+                                            * from the Prefabs tab now just stages (kind=1) and prompts the user to
+                                            * paste manually, matching the ORIGINAL's own actual workflow. Kept here
+                                            * for reference RVA only -- not wired to anything. */
 #define ENT_DESHARE_RVA        0x52c920u   /* FUN_14052c920(&array[id]) -- COW make-unique: de-share an entity's 0x6f8
                                             * block before an in-place edit (the engine's UNIVERSAL edit discipline).
                                             * RE-DERIVE per build: if *(int*)*slot != 1 -> operator_new(0x6f8) + deep-copy
                                             * body (FUN_14053d800) + store into slot; returns *slot+8 (the private body). */
-#define PREFAB_TEMP_SIZE       0x220       /* generous sizeof(temp idSnapEntityPrefab) */
 
 /* ============================================================ apply-chain struct sizes ============== */
 /* DIRECT from the XINPUT1_3 FUN_180004b80 / FUN_180004950 / FUN_1800044a0 decompiles + the engine ctors
@@ -145,7 +181,7 @@ typedef void  (*buffer_cmd_fn)(void *cmdSys, const char *text);                 
 typedef void  (*add_command_fn)(void *cmdSys, const char *name, void *cb, void *p3,
                                 const char *help, unsigned int flags);                /* AddCommand 0x1aa3630 */
 typedef void  (*prefab_ctor_fn)(void *self);                                          /* PrefabCtor 0x54d0a0 */
-typedef char  (*prefab_populate_fn)(void *self, void *editor);                        /* PrefabPopulate 0x54e410 */
+typedef char  (*prefab_populate_fn)(void *self, void *editor, int *outStatus);        /* PrefabPopulate 0x54e410 */
 typedef void  (*prefab_dtor_fn)(void *self);                                          /* PrefabDtor 0x51d870 */
 
 /* ============================================================ module state (resolved once) ========== */
@@ -664,6 +700,7 @@ static int ae_mkcmd_one(const char *prefab_text)
 }
 
 
+
 /* ============================================================ the clone_bss_apply command (FIX B) ===
  * The engine drains this on the DOOM main thread at ExecuteCommandBuffer (the decl-safe exec point). It
  * consumes the pending batch the frontend stashed, runs the heavy apply per item, frees the batch, and
@@ -676,7 +713,12 @@ static void ae_toast_result(const char *op, int applied, int total)
     char text[160];
     _snprintf_s(text, sizeof text, _TRUNCATE, "%s: applied %d/%d (engine round-trip)",
                 op[0] ? op : "apply", applied, total);
-    if (iface && iface->vtbl && iface->vtbl->toast)
+    /* Load/Place already shows its own actionable toast ("staged -- press Ctrl+V to place it") the
+     * moment it schedules -- this generic "SnapStack: ..." one just duplicates/confuses that with no
+     * new information (it's the same op every Qt sh_apply-style caller shares, hence the fixed
+     * "SnapStack" label, which reads as unrelated to a Prefabs-tab action). Skip it for that op only;
+     * the Qt mkcmd command has no toast of its own, so it still needs this one. */
+    if (iface && iface->vtbl && iface->vtbl->toast && strcmp(op, "load-prefab") != 0)
         iface->vtbl->toast(iface, "SnapStack", text);
     /* ALSO log directly -- the toast slot logs too, but a no-editor/late drain might skip the engine toast. */
     char line[200];
@@ -886,7 +928,8 @@ static int slot_serialize_selection(sh_iface *self, char *out_json, int cap)
 
     __try {
         g_prefab_ctor(prefab); prefab_ctored = 1;
-        char populated = g_prefab_populate(prefab, (void *)ed);   /* fill from editor selection */
+        int populateStatus = 0;
+        char populated = g_prefab_populate(prefab, (void *)ed, &populateStatus);   /* fill from editor selection */
         if (populated & 0xff) {
             g_node_ctor(node7, SER_TAG_KIND);   node7_ctored = 1;
             g_node_ctor(outTree, SER_TREE_KIND); tree_ctored = 1;
