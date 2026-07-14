@@ -7,7 +7,8 @@
  *
  * ITERATION 4 -- deeper Entities tab.
  *   - multi-select (JS), context menu: Copy ID (clipboard), Delete (+0x130 selection_guard),
- *     Push to stack 0 (honest stub -- SnapStack ops not ported to this UI yet).
+ *     Push to stack 0 (+0x2A0 push_to_stack -- pushes onto the backend-owned SnapStack stack; see
+ *     src/backend/snapstack.c for the `sh <subcommand>` console ops that then consume it).
  *   - auto-refresh: a cheap content signature over the walk; the list is re-emitted only when it
  *     changes (add/delete/rename/reclass/hide), so no needless re-renders.
  *   - synchronize with editor: when the checkbox is on, poll get_selection (+0x150); a single changed
@@ -36,6 +37,7 @@
 #include "../sh_entity_desc.h" /* GENERATED: OUR RE-extracted Inherit/Classname descriptions (same table sh_tabs.cpp uses) */
 #include "../sh_event_catalog.h" /* GENERATED: OUR event-def catalog, 1611 events (same table sh_timeline.cpp uses) */
 #include "../sh_entity_asset_lists.h" /* GENERATED: OUR per-entity-class model/anim asset lists (same table sh_timeline.cpp uses) */
+#include "../sh_event_docs.h" /* GENERATED: OUR author-facing event/arg descriptions, 1611 events (same table sh_timeline.cpp's EXPLAIN box uses) */
 
 using namespace Microsoft::WRL;
 
@@ -1007,6 +1009,36 @@ static void poc_send_events()
     json += L"]}";
     g_webview->PostWebMessageAsJson(json.c_str());
 }
+/* Timelines "EXPLAIN" box (Option B, see docs/webview-ui.md) -- our author-facing summary + per-arg
+ * descriptions for each event, ported from the Qt clone's tl_set_event_description/sh_event_docs.h. Same
+ * "ship the whole generated table once per session, cache client-side" pattern as poc_send_events -- static
+ * data (sh_event_docs.h), no engine touch. Sent lazily (enumEventDocs), not folded into poc_send_events,
+ * since it's a materially bigger payload the description panel doesn't need until the user actually opens
+ * a timeline and expands one. */
+static void poc_send_event_docs()
+{
+    if (!g_webview) return;
+    std::wstring json; json.reserve((size_t)SH_EVENT_DOCS_N * 192 + 32);
+    json = L"{\"kind\":\"eventDocs\",\"items\":[";
+    for (int i = 0; i < SH_EVENT_DOCS_N; i++) {
+        if (i) json += L",";
+        const ShEvtDoc &d = SH_EVENT_DOCS[i];
+        json += L"{\"name\":\""; json += poc_json_w(d.name ? d.name : ""); json += L"\"";
+        json += L",\"summary\":\""; json += poc_json_w(d.summary ? d.summary : ""); json += L"\"";
+        json += L",\"confidence\":\""; json += poc_json_w(d.confidence ? d.confidence : ""); json += L"\"";
+        json += L",\"source\":\""; json += poc_json_w(d.source ? d.source : ""); json += L"\"";
+        json += L",\"args\":[";
+        for (int a = 0; a < d.nArgs; a++) {
+            if (a) json += L",";
+            const ShEvtArgDoc &ad = d.args[a];
+            json += L"{\"name\":\""; json += poc_json_w(ad.name ? ad.name : ""); json += L"\"";
+            json += L",\"desc\":\""; json += poc_json_w(ad.desc ? ad.desc : ""); json += L"\"}";
+        }
+        json += L"]}";
+    }
+    json += L"]}";
+    g_webview->PostWebMessageAsJson(json.c_str());
+}
 static void poc_json_asset_items(std::wstring &json, const ShAssetItem *items, int n)
 {
     json += L"[";
@@ -1284,6 +1316,8 @@ static HRESULT on_message(ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventA
                 poc_send_enum(1, i8.c_str());
             } else if (cmd == L"enumEvents") {
                 poc_send_events();
+            } else if (cmd == L"enumEventDocs") {
+                poc_send_event_docs();
             } else if (cmd == L"enumEntityAssets") {
                 poc_send_entity_assets();
             } else if (cmd == L"enumArgResclass") {
@@ -1324,11 +1358,31 @@ static HRESULT on_message(ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventA
                 else if (dir == L"tl") ht = HTTOPLEFT;   else if (dir == L"tr") ht = HTTOPRIGHT;
                 else if (dir == L"bl") ht = HTBOTTOMLEFT;else if (dir == L"br") ht = HTBOTTOMRIGHT;
                 if (ht) { ReleaseCapture(); SendMessageW(g_hwnd, WM_NCLBUTTONDOWN, ht, 0); }
+            } else if (cmd == L"tlUseSelection") {
+                /* "Runs on" -> "Use current selection": a fresh on-demand read (not the periodic poll's
+                 * cached count), since the user expects THIS click to reflect whatever's selected right now.
+                 * Full POC_MAX_ENTS buffer (not a small cap) so a >1 selection reports its TRUE count rather
+                 * than being silently truncated to the buffer size. */
+                static int uselids[POC_MAX_ENTS];
+                int un = poc_get_selection(uselids, POC_MAX_ENTS);
+                wchar_t m[96];
+                if (un == 1) _snwprintf_s(m, _countof(m), _TRUNCATE, L"{\"kind\":\"tlUseSelectionResult\",\"ok\":true,\"eid\":%d}", uselids[0]);
+                else _snwprintf_s(m, _countof(m), _TRUNCATE, L"{\"kind\":\"tlUseSelectionResult\",\"ok\":false,\"count\":%d}", un);
+                poc_post_json(m);
             } else if (cmd == L"pushStack") {
                 std::vector<int> ids; json_get_intarray(json, L"eids", ids);
+                bool ok = g_iface && g_iface->vtbl && g_iface->vtbl->push_to_stack && !ids.empty();
+                if (ok) g_iface->vtbl->push_to_stack(g_iface, 0, ids.data(), (int)ids.size());
                 wchar_t m[160];
                 _snwprintf_s(m, _countof(m), _TRUNCATE,
-                    L"{\"kind\":\"info\",\"text\":\"Push to stack 0: %d selected -- SnapStack ops not ported to this UI yet.\"}", (int)ids.size());
+                    L"{\"kind\":\"pushStackResult\",\"result\":%d,\"count\":%d}", ok ? 1 : 0, (int)ids.size());
+                poc_post_json(m);
+            } else if (cmd == L"clearStack") {
+                bool ok = g_iface && g_iface->vtbl && g_iface->vtbl->clear_stack;
+                int had = ok ? g_iface->vtbl->clear_stack(g_iface, 0) : 0;
+                wchar_t m[128];
+                _snwprintf_s(m, _countof(m), _TRUNCATE,
+                    L"{\"kind\":\"clearStackResult\",\"result\":%d,\"count\":%d}", ok ? 1 : 0, had);
                 poc_post_json(m);
             } else if (cmd == L"save") {
                 int eid = -1; json_get_int(json, L"eid", &eid);
@@ -1496,7 +1550,17 @@ static void poc_think_loop()
 
         if (g_webview_ready) {
             bool ready = poc_editor_ready() != 0;
-            if (ready && !was_visible) { ShowWindow(g_hwnd, SW_SHOW); UpdateWindow(g_hwnd); poc_send_list(); was_visible = true; }
+            if (ready && !was_visible) {
+                ShowWindow(g_hwnd, SW_SHOW); UpdateWindow(g_hwnd); poc_send_list();
+                /* the editor screen just came back (Play just ended, or a map load/reload just completed --
+                 * editor_ready_poll (+0x88) is 1 in either case, 0 in the HUB/menu/Play). The webview host
+                 * window + its DOM/JS state are only HIDDEN across that gap, never destroyed, so any Timeline
+                 * Editor panel left open before Play/reload would otherwise keep showing stale cached data
+                 * with no signal to the user that it's stale. Force it closed here so the user must
+                 * re-select (and re-fetch) before editing. */
+                poc_post_json(L"{\"kind\":\"editorReopened\"}");
+                was_visible = true;
+            }
             else if (!ready && was_visible) { ShowWindow(g_hwnd, SW_HIDE); was_visible = false; }
 
             /* periodic auto tasks (~ every 10 frames = ~330 ms): list change poll, editor-selection sync,

@@ -194,6 +194,24 @@ typedef int          (*sh_apply_sync_fn)(struct sh_iface *self, const struct sh_
  * logic WebView silently lacked. */
 typedef int          (*sh_normalize_timeline_inherit_fn)(struct sh_iface *self, int id);          /* +0x298 (ext 6) */
 
+/* +0x2A0 (ext 7) push `ids` onto the BACKEND-owned SnapStack numbered stack `index` (dedup-on-push,
+ * same semantics as `sh psel`/`sh phov`). Lets a frontend running OUT OF PROCESS from the backend's own
+ * snapstack.c (i.e. the webview host, which never links snapstack.c directly) reach the SAME stack a
+ * `sh <subcommand>` console command typed afterward will see -- mirrors the Qt frontend's Entities-tab
+ * "Push to stack 0" context-menu action, which reaches its own in-process g_stacks directly (src/ui/
+ * snapstack.cpp's sh_snapstack_push_ids) and has no need of this slot. (NOTE: an EARLIER port attempt used
+ * +0x290 for this slot; that offset was reassigned to apply_sync after that attempt was reset out -- this
+ * is a fresh ext slot, +0x2A0, not a reuse.) */
+typedef void          (*sh_push_to_stack_fn)(struct sh_iface *self, int index, const int *ids, int count); /* +0x2A0 (ext 7) */
+
+/* +0x2A8 (ext 8) empty the BACKEND-owned SnapStack numbered stack `index` in place -- same semantics as
+ * `sh cstk`, and the out-of-process counterpart to push_to_stack above. Returns the number of ids that were
+ * on the stack before clearing (so the caller can toast a confirmation the same way `sh cstk` itself does;
+ * a cleared stack is otherwise invisible without a chkstk). Lets a frontend running out of process from the
+ * backend (the webview host) drive "Clear stack 0" from a context-menu click instead of needing the DOOM
+ * console. */
+typedef int           (*sh_clear_stack_fn)(struct sh_iface *self, int index);                      /* +0x2A8 (ext 8) */
+
 /* ------------------------------------------------------------------ heavy apply slots --------
  * The heavy serialize/deserialize/apply slots the SnapStack APPLY-ops (bss/bsi/bsf/bsb/bse/accl/
  * acctargets/mkcmd) need. These are the native port of the reference implementation's +0xc8 serialize / +0xd0 deserialize-
@@ -369,6 +387,10 @@ typedef struct sh_iface_vtbl {
                                                       * (entity-list re-read signal; see wiring_cleandirect.c) */
     sh_apply_sync_fn           apply_sync;           /* +0x290 (ext 5) SYNCHRONOUS inline apply (OG-faithful) */
     sh_normalize_timeline_inherit_fn normalize_timeline_inherit; /* +0x298 (ext 6) palette-timeline portable-inherit one-shot */
+    sh_push_to_stack_fn        push_to_stack;        /* +0x2A0 (ext 7) push onto the backend-owned SnapStack
+                                                      * stack `index` (dedup) -- see the typedef comment */
+    sh_clear_stack_fn          clear_stack;          /* +0x2A8 (ext 8) empty the backend-owned SnapStack
+                                                      * stack `index` -- see the typedef comment */
 } sh_iface_vtbl;
 
 /* ------------------------------------------------------------------ the interface object -----------
@@ -496,6 +518,10 @@ typedef struct sh_iface_engine_slots {
     sh_apply_sync_fn             apply_sync;            /* +0x290 (ext 5) */
     /* clone-extension: the palette-timeline portable-inherit one-shot normalize (shared by both frontends). */
     sh_normalize_timeline_inherit_fn normalize_timeline_inherit; /* +0x298 (ext 6) */
+    /* clone-extension: push onto the backend-owned SnapStack stack (out-of-process frontends only). */
+    sh_push_to_stack_fn          push_to_stack;         /* +0x2A0 (ext 7) */
+    /* clone-extension: empty the backend-owned SnapStack stack (out-of-process frontends only). */
+    sh_clear_stack_fn            clear_stack;           /* +0x2A8 (ext 8) */
 } sh_iface_engine_slots;
 
 void sh_iface_bind_engine_slots(const sh_iface_engine_slots *slots);
