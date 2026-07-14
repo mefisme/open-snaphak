@@ -192,6 +192,19 @@ static std::string w_to_utf8(const std::wstring &w)
     WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), &s[0], n, nullptr, nullptr);
     return s;
 }
+/* Path-safety gate (contributor-reported): resolve_prefab_path (+0xc0, backend) is a plain string concat
+ * with no rejection of its own -- a name containing ".." or a path separator would resolve outside the
+ * prefabs\ tree before ever reaching fopen/DeleteFileA/MoveFileA/CreateDirectoryA/RemoveDirectoryA. Only
+ * the JS side guarded this before. Applied to every raw prefab/folder name component the UI supplies,
+ * BEFORE it is concatenated into a prefix/filename and handed to resolve_prefab_path. */
+static bool poc_valid_name(const std::string &n)
+{
+    if (n.empty() || n.size() > 200) return false;
+    if (n.find("..") != std::string::npos) return false;
+    if (n.find('/') != std::string::npos || n.find('\\') != std::string::npos) return false;
+    if (n.find(':') != std::string::npos) return false;
+    return true;
+}
 static bool json_get_wstr(const std::wstring &j, const wchar_t *key, std::wstring &out)
 {
     std::wstring needle = L"\""; needle += key; needle += L"\"";
@@ -349,6 +362,20 @@ static void poc_rescan_timelines(int n)
             poc_logf("poc_rescan_timelines: get_classname_copy FAULTED for id=%lu (skipped)", (unsigned long)g_ents[i].eid);
         }
         if (c && (strcmp(c, "idTarget_Timeline") == 0 || strcmp(c, "idEncounterManager") == 0)) {
+            /* PORTABLE-INHERIT NORMALIZE (2026-07-13): a Timeline placed from the in-game palette is
+             * spawned from a repurposed placeholder entityDef, so it records that as its `inherit` -- a
+             * saved map would then only reload where our override is installed. This was Qt-only until
+             * now (sh_timeline.cpp sh_timeline_normalize_inherit); the logic is ported to the shared
+             * backend slot +0x298 so WebView gets it too. Cheap on a non-match (a raw defsub-inherit read,
+             * no serialize/no alloc) and idempotent, so it's safe to call unconditionally on every
+             * Timeline-classed id every rescan -- only idTarget_Timeline can carry the placeholder
+             * (idEncounterManager's inherit is unrelated), matching Qt's own gating. The displayed Inherit
+             * box (if this entity is open in the Entity-State panel) self-corrects via the regular auto
+             * state poll -- see the per-field dirty exception in mockup.html's 'state' handler. */
+            if (strcmp(c, "idTarget_Timeline") == 0 && g_iface->vtbl->normalize_timeline_inherit) {
+                __try { g_iface->vtbl->normalize_timeline_inherit(g_iface, g_ents[i].eid); }
+                __except (EXCEPTION_EXECUTE_HANDLER) {}
+            }
             g_tls[tn].eid = g_ents[i].eid;
             strncpy_s(g_tls[tn].id, POC_ID_CAP, g_ents[i].id, _TRUNCATE);
             strncpy_s(g_tls[tn].name, POC_NAME_CAP, g_ents[i].name, _TRUNCATE);
@@ -563,6 +590,10 @@ static void poc_apply_create_prefab()
         g_create_result = 2;
         return;
     }
+    if (!poc_valid_name(g_create_prefab_name)) {
+        poc_log("create-prefab: ABORT (name rejected -- '..' or path separator)");
+        return;
+    }
     char path[1024]; path[0] = '\0';
     std::string fname = g_create_prefab_name + ".json";
     if (!g_iface->vtbl->resolve_prefab_path(g_iface, "prefabs/", fname.c_str(), path, (int)sizeof path) || !path[0]) {
@@ -585,17 +616,20 @@ static void poc_apply_create_prefab()
  * prefab/folder file op below so they all agree on where a folder actually lives on disk. */
 static bool poc_prefab_dir(const std::string &folder, char *out, int cap)
 {
-    if (!g_iface || !g_iface->vtbl || !g_iface->vtbl->resolve_prefab_path) { if (cap) out[0] = '\0'; return false; }
+    if (cap) out[0] = '\0';
+    if (!folder.empty() && !poc_valid_name(folder)) return false;
+    if (!g_iface || !g_iface->vtbl || !g_iface->vtbl->resolve_prefab_path) return false;
     std::string prefix = folder.empty() ? "prefabs/" : ("prefabs/" + folder + "/");
-    out[0] = '\0';
     return g_iface->vtbl->resolve_prefab_path(g_iface, prefix.c_str(), "", out, cap) && out[0] != '\0';
 }
 static bool poc_prefab_file_path(const std::string &folder, const std::string &name, char *out, int cap)
 {
-    if (!g_iface || !g_iface->vtbl || !g_iface->vtbl->resolve_prefab_path) { if (cap) out[0] = '\0'; return false; }
+    if (cap) out[0] = '\0';
+    if (!folder.empty() && !poc_valid_name(folder)) return false;
+    if (!poc_valid_name(name)) return false;
+    if (!g_iface || !g_iface->vtbl || !g_iface->vtbl->resolve_prefab_path) return false;
     std::string prefix = folder.empty() ? "prefabs/" : ("prefabs/" + folder + "/");
     std::string fname = name + ".json";
-    out[0] = '\0';
     return g_iface->vtbl->resolve_prefab_path(g_iface, prefix.c_str(), fname.c_str(), out, cap) && out[0] != '\0';
 }
 static void poc_strip_trailing_sep(char *s)
@@ -662,6 +696,19 @@ static int poc_apply_edit_seh(const sh_apply_item *it, int count, const char *op
     __try { return g_iface->vtbl->apply_edit(g_iface, it, count, op) ? 1 : 0; }
     __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
 }
+/* Decl-edit (kind=0) commits MUST go inline via +0x290, never the deferred +0xd0 schedule -- that's the
+ * deferred-apply double-free the Qt frontend hit and fixed (docs/backend-changes.md, docs/qt-changes.md,
+ * 2026-07-12). Mirrors sh_timeline.cpp's tl_iface_schedule_apply: try apply_sync first, fall back to the
+ * deferred apply_edit only on an old backend that lacks +0x290. kind=1 (mkcmd staging, e.g. Load/Place) is
+ * unaffected by this bug and stays on poc_apply_edit_seh/apply_edit. */
+static int poc_apply_sync_seh(const sh_apply_item *it, int count, const char *op)
+{
+    __try {
+        if (g_iface->vtbl->apply_sync) return g_iface->vtbl->apply_sync(g_iface, it, count, op) > 0 ? 1 : 0;
+        if (g_iface->vtbl->apply_edit) return g_iface->vtbl->apply_edit(g_iface, it, count, op) ? 1 : 0;
+        return 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+}
 static void poc_apply_load_prefab()
 {
     g_load_result = -1;
@@ -688,17 +735,22 @@ static void poc_apply_load_prefab()
     poc_log(l);
 }
 /* Timelines Stage 5 (Save): kind=0 (deserialize the FULL patched entity JSON -> temp def -> commit
- * class/inherit/source on `id`) -- the SAME apply_edit path as kind=1 above, just id-targeted instead of
- * paste-targeted. The page already did the hard part (fresh-reserialize + JSON-patch the componentTimeLine/
- * encounterComponent field, matching Qt's tl_patch_component); this is purely "hand the opaque blob to the
- * engine and report whether it took." */
+ * class/inherit/source on `id`) -- id-targeted instead of paste-targeted. The page already did the hard
+ * part (fresh-reserialize + JSON-patch the componentTimeLine/encounterComponent field, matching Qt's
+ * tl_patch_component); this is purely "hand the opaque blob to the engine and report whether it took."
+ * COMMITS VIA +0x290 SYNC (OG-faithful, matches Qt): this is a decl-edit commit, same class of op as
+ * SnapStack's acctargets/bss/bse and Qt's Timeline Save -- the deferred +0xd0 schedule double-frees the
+ * committed decl-source block on the next Play->teardown, exactly the crash Qt fixed. See poc_apply_sync_seh
+ * and docs/qt-changes.md. */
 static void poc_apply_save_timeline()
 {
     g_save_timeline_result = 0;
     if (g_save_timeline_eid < 0 || g_save_timeline_json.empty()) return;
-    if (!g_iface || !g_iface->vtbl || !g_iface->vtbl->apply_edit) { poc_log("save-timeline: ABORT (iface/slot missing)"); return; }
+    if (!g_iface || !g_iface->vtbl || (!g_iface->vtbl->apply_sync && !g_iface->vtbl->apply_edit)) {
+        poc_log("save-timeline: ABORT (iface/slot missing)"); return;
+    }
     sh_apply_item it; it.kind = 0; it.id = g_save_timeline_eid; it.text = g_save_timeline_json.c_str();
-    g_save_timeline_result = poc_apply_edit_seh(&it, 1, "save-timeline");
+    g_save_timeline_result = poc_apply_sync_seh(&it, 1, "save-timeline");
     char l[128]; _snprintf_s(l, sizeof l, _TRUNCATE, "save-timeline: eid=%d ok=%d", g_save_timeline_eid, g_save_timeline_result);
     poc_log(l);
 }
@@ -1503,6 +1555,12 @@ extern "C" __declspec(dllexport) DWORD WINAPI snaphak_ui_init(LPVOID param_1)
     g_iface = args ? args->iface : nullptr;
     g_ents = (PocEnt *)malloc(sizeof(PocEnt) * POC_MAX_ENTS);
     g_tls  = (PocTl  *)malloc(sizeof(PocTl)  * POC_MAX_TLS);
+    if (!g_ents || !g_tls) {
+        poc_log("snaphak_ui_init: FATAL -- malloc failed for g_ents/g_tls, aborting init");
+        free(g_ents); g_ents = nullptr;
+        free(g_tls);  g_tls  = nullptr;
+        return 1;
+    }
     poc_read_version();
 
     poc_log("=== snaphak_ui_init (WebView2 POC, entities-deep) entered ===");

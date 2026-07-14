@@ -189,14 +189,24 @@ static std::string tl_iface_serialize_entity(sh_iface *iface, int id)
     out.resize((size_t)n);
     return out;
 }
+/* Commit a patched timeline-entity JSON. OG-FAITHFUL: run it SYNCHRONOUSLY INLINE on this (UI/think-loop)
+ * thread via +0x290 -- exactly like the SnapStack decl-edit ops (snapstack.cpp iface_apply). The old deferred
+ * +0xd0 route double-owned the committed decl-source block (Timeline Save play->teardown crash) AND, for the
+ * one-shot inherit-normalize below, did NOT persist reliably -- the sh_tabs poll kept seeing the placeholder
+ * inherit and re-firing it, so a "tl-inherit-portable" toast popped on EVERY logic-entity selection. Sync
+ * makes the commit stick immediately (true one-shot) with a single clean owner. Falls back to the deferred
+ * +0xd0 schedule only on an old backend without +0x290. See [[snapstack-deferred-apply-double-free-solved]]
+ * / docs/qt-changes.md. */
 static bool tl_iface_schedule_apply(sh_iface *iface, int id, const std::string &patched, const char *op)
 {
-    if (!iface || !iface->vtbl || !iface->vtbl->apply_edit || patched.empty() || id < 0) return false;
+    if (!iface || !iface->vtbl || patched.empty() || id < 0) return false;
     sh_apply_item it;
     it.kind = 0;                 /* bss-style deserialize+commit on the timeline entity id */
     it.id   = id;
     it.text = patched.c_str();
-    return iface->vtbl->apply_edit(iface, &it, 1, op) != 0;
+    if (iface->vtbl->apply_sync) return iface->vtbl->apply_sync(iface, &it, 1, op) > 0;  /* +0x290 sync inline */
+    if (iface->vtbl->apply_edit) return iface->vtbl->apply_edit(iface, &it, 1, op) != 0; /* old-backend fallback */
+    return false;
 }
 static void tl_iface_toast(sh_iface *iface, const char *title, const char *text)
 {
@@ -208,14 +218,25 @@ static void tl_iface_toast(sh_iface *iface, const char *title, const char *text)
  * `inherit` -> the saved map only reloads where our override is installed. Rewrite the inherit to
  * `snapmaps/unknown` (the universal SnapMap base a morph-made timeline carried) so the map is portable. The
  * `className` STAYS `idTarget_Timeline` (NO reclass -> no node-cap change, no render-node re-bucket -- none of
- * the create-crash surface); the edit rides the same main-thread bss apply (backend ae_apply_one) the
- * Timeline-Editor commit uses, and the backend's class/inherit compat gate makes a bad pair a safe no-op. A RAW
- * string splice on the serialized JSON (NOT a QJson re-serialize, which would drop the engine-required float
- * ".0"). Idempotent one-shot: after the rewrite the inherit is snapmaps/unknown and never re-matches. */
+ * the create-crash surface).
+ *
+ * PORTED TO THE BACKEND 2026-07-13 (+0x298 `normalize_timeline_inherit`, snaphak_iface.h) so both frontends
+ * share ONE implementation instead of this logic living Qt-only (WebView silently lacked it -- a palette
+ * Timeline saved from WebView would keep the non-portable inherit forever). This wrapper tries the shared
+ * slot first; the old local C++ logic (a raw string splice on the serialized JSON -- NOT a QJson re-
+ * serialize, which would drop the engine-required float ".0") is kept ONLY as a fallback for an old backend
+ * that predates the +0x298 slot -- this exact logic is what the backend port mirrors. Idempotent one-shot
+ * either way: after the rewrite the inherit is snapmaps/unknown and never re-matches (though live-testing
+ * showed it can take a few rapid re-commits before that sticks -- confirmed harmless, matches this
+ * function's own long-standing behavior; see the +0x298 slot doc for detail). */
 bool sh_timeline_normalize_inherit(sh_iface *iface, int id)
 {
-    static const char PLACEHOLDER[] = "snapmaps/editor_only/placeholder_target";
     if (!iface || id < 0) return false;
+    if (iface->vtbl && iface->vtbl->normalize_timeline_inherit)
+        return iface->vtbl->normalize_timeline_inherit(iface, id) != 0;
+
+    /* old-backend fallback (pre-+0x298) */
+    static const char PLACEHOLDER[] = "snapmaps/editor_only/placeholder_target";
     std::string full = tl_iface_serialize_entity(iface, id);
     if (full.empty() || full.find(PLACEHOLDER) == std::string::npos) return false;
     std::string patched = full;
@@ -360,7 +381,7 @@ static void tl_connect_dirty(ShTimelineEditor *ed, QWidget *root)
 /* Non-"idDecl" pointer arg-types whose decl-type short-name is NOT the mechanical strip-"id" (verified vs the
  * source-of-record entity decls): idSoundShader* is the "sound" decl-type, NOT
  * "soundshader". idActorModifier* and idMaterial* DO reduce mechanically but are listed for explicitness. The rest
- * of the catalog's id<X>* (idMD6Anim*, idEventReceiver*, …) are assets/objects, NOT decls -> no entry -> they
+ * of the catalog's id<X>* (idMD6Anim*, idEventReceiver*, ...) are assets/objects, NOT decls -> no entry -> they
  * stay editable enum boxes. RE: timeline-decl-resclass-re (the OG +0x100 path; FUN_18000994c is
  * idDecl*-only and PREPENDS "idDecl"; the inner-key is the engine's decl-type dir name, not a mechanical reduction). */
 static const char *tl_decl_alias(const std::string &typeName)

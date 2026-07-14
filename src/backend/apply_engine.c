@@ -52,6 +52,9 @@
  * editor's wire-overlay render buckets; a timeline is placed by the engine via the in-game palette.) */
 #define DEFSUB_CLASS_OFF       0x60         /* defsub+0x60 -> classname idStr (commit dst) */
 #define DEFSUB_INHERIT_OFF     0x58         /* defsub+0x58 -> inherit idStr (commit dst) */
+#define DECL_BLOB_OFF          0x38         /* defsub+0x38 -> decl-SOURCE text blob ptr (what get_inherit reads
+                                             * + the map save serializes; LAGS the raw idStr by one commit --
+                                             * see slot_normalize_timeline_inherit's re-fire gate) */
 #define ENT_COUNT_CAP         1000000u      /* sanity cap on the entity array count */
 
 /* mkcmd / prefab paste-staging slot: editor+0x209a8 (the in-game Ctrl+V target). LIVE-CONFIRMED 2026-06-25,
@@ -182,6 +185,18 @@
     _snprintf_s(_ld, sizeof _ld, _TRUNCATE, __VA_ARGS__); backend_log(_ld); } while (0)
 #else
 #define AE_DESER_DIAG(...) do { } while (0)
+#endif
+
+/* apply-commit diagnostic (2026-07-10, save->reload heap-corruption hunt): log the ACTUAL srcPtr/clsPtr/inhPtr
+ * pointers + strlens + the decl-source head that ae_apply_one hands to DeclSourceRebuild/IdStrAssign, and
+ * confirm each engine call returns -- ground truth on where a pointer/length goes bad, instead of guessing.
+ * Flip to 0 to silence. */
+#define AE_APPLY_DIAG_ON  0
+#if AE_APPLY_DIAG_ON
+#define AE_APPLY_DIAG(...) do { char _la[512]; \
+    _snprintf_s(_la, sizeof _la, _TRUNCATE, __VA_ARGS__); backend_log(_la); } while (0)
+#else
+#define AE_APPLY_DIAG(...) do { } while (0)
 #endif
 
 /* ============================================================ engine fn typedefs (sig-resolved) ===== */
@@ -473,12 +488,26 @@ static int ae_deserialize_to_obj(const char *text, void *dstObj, const char *typ
     uint8_t lexer[LEXER_SIZE];
     uint8_t parseNode[PARSE_NODE_SIZE];
     uint8_t srcStr[IDSTR_SIZE];
+    memset(node7, 0, sizeof node7);       /* parity with the serialize path (all its buffers are memset) */
+    memset(lexer, 0, sizeof lexer);
+    memset(parseNode, 0, sizeof parseNode);
+    memset(srcStr, 0, sizeof srcStr);
     int node7_ctored = 0, lex_ctored = 0, pn_ctored = 0, src_ctored = 0;
     int ok = 0;
 
     __try {
         g_node_ctor(node7, 7);          node7_ctored = 1;  /* the {tag} arg5 sub-node (kind 7) */
-        g_lex_ctor(lexer);              lex_ctored = 1;    /* idLexer ctor (constructs +0x30/+0x88 idStrs) */
+        /* ROOT-CAUSE FIX (2026-07-10, save->reload "Memory corruption before block" crash): LexCtxCtor
+         * (g_lex_ctor, 0x1a5bb70) does NOT construct the lexer's two embedded idStrs at +0x30/+0x88. OG's
+         * deserialize wrapper FUN_180004370 constructs them SEPARATELY (0x19fd040) BEFORE LexCtxCtor -- proving
+         * LexCtxCtor leaves them untouched. We used to call g_lex_ctor alone on an un-memset buffer, so those two
+         * idStrs held stack GARBAGE; the lexer grows them while tokenizing and the teardown (g_idstr_dtor at
+         * lexer+0x30/+0x88 below) frees a garbage/heap pointer -> heap corruption, detected as an IdStrDtor AV on
+         * the NEXT map load. Shared by EVERY kind=0 commit (acctargets/timeline/bss), which is why they all
+         * crashed on save/reload. Construct the two idStrs explicitly (empty), matching OG's order. */
+        g_idstr_ctor(lexer + LEXER_IDSTR0_OFF, "");
+        g_idstr_ctor(lexer + LEXER_IDSTR1_OFF, "");
+        g_lex_ctor(lexer);              lex_ctored = 1;    /* LexCtxCtor -- context fields only, NOT the +0x30/+0x88 idStrs */
         g_node_ctor(parseNode, 0);      pn_ctored = 1;     /* the tree the lexer fills + deser reads (kind 0) */
         g_idstr_ctor(srcStr, text);     src_ctored = 1;    /* src idStr from the C string */
 
@@ -570,27 +599,21 @@ static int ae_apply_one(int id, const char *patched_text)
     void *defsub = NULL;
     if (!ae_read_ptr((const uint8_t *)ent + ENT_DEFSUB_OFF, &defsub) || defsub == NULL) return 0;
 
-    /* DE-SHARE the entity's copy-on-write block BEFORE mutating it -- the engine's UNIVERSAL edit discipline. Every
-     * engine edit path calls the COW make-unique FUN_14052c920 on the entity's slot before touching it (xrefs: 11
-     * call sites); our reclass previously poked the live defsub in place, skipping this. If the 0x6f8 block is
-     * SHARED (refcount != 1 -- an undo snapshot / staging slot aliases it), an in-place mutation corrupts the alias
-     * AND leaves the COW refcount imbalanced, so a later release frees the block while the editor's entity-collection
-     * slot still points at it = the create-timeline use-after-free (de-share-pass AV 0x5a5167 on play-exit /
-     * wire-render AV 0xd32a39 on reload; both DIRECTLY captured). De-share makes THIS slot a private copy (refcount 1)
-     * first (a no-op if already private), then we re-fetch ent + defsub -- the slot now points at the fresh private
-     * block. SEH-guarded; universal (matches the engine -- de-sharing before ANY edit is always correct COW). The
-     * slot = array_base + id*8 (array_base = the entity-ptr array ae_entity_array returns; == the engine's
-     * collection+0xc0). */
-    if (g_deshare) {
-        int deshared = 0;
-        __try { g_deshare((uint8_t *)array + (size_t)id * 8); deshared = 1; }
-        __except (EXCEPTION_EXECUTE_HANDLER) { deshared = 0; }
-        if (deshared) {
-            ent = ae_entity_ptr(array, count, id);
-            if (!ent) return 0;
-            if (!ae_read_ptr((const uint8_t *)ent + ENT_DEFSUB_OFF, &defsub) || defsub == NULL) return 0;
-        }
-    }
+    /* DE-SHARE DISABLED (2026-07-10) -- HYPOTHESIS TEST: match OG's confirmed commit discipline. OG SnapHak's
+     * commit function (XINPUT1_3.dll FUN_1800045a0, both 1.31 and Beta 2) pokes the live defsub in place
+     * (DeclSourceRebuild + IdStrAssign, exactly like the code below) with NO COW make-unique first. Verified by
+     * instruction search: the engine de-share RVA 0x52c920 appears in 0 of 22,197 (1.31) and 0 of 36,277 (Beta 2)
+     * XINPUT instructions, while the search method is validated (it finds 0x5e9400/0x17ae560 in the same commit).
+     * So OG never de-shares in ANY edit path, yet doesn't crash on the acctargets->play->play repro that our
+     * de-share-present build DOES crash on. Removing the de-share moves us TOWARD OG's proven-safe behavior.
+     *
+     * ORIGINAL rationale kept for context (this de-share was added to fix a create-timeline use-after-free:
+     * de-share-pass AV 0x5a5167 on play-exit / wire-render AV 0xd32a39 on reload). NOTE those were ALSO play-exit
+     * crashes -- and the de-share does NOT prevent the current acctargets play-exit crash -- so it may have been a
+     * partial/wrong fix for a shared root cause OG addresses differently (OG: don't de-share, DO settle). If this
+     * change reintroduces the create-timeline UAF, that path needs its own OG-matching fix, not a blanket de-share.
+     * (void)g_deshare;  -- resolved-but-unused is fine. */
+    (void)g_deshare;
 
     /* LAYER C (crash prevention): a class+inherit pair in the patched text where the class does NOT derive
      * from the inherit's base would FATALLY fault the deserialize below (the engine's "Class X does not
@@ -605,7 +628,18 @@ static int ae_apply_one(int id, const char *patched_text)
             return 0;   /* LAYER C: the resulting pair would fatally fault the deserialize -> skip it (no crash) */
     }
 
+    /* (Double-commit / OG-settle-commit was tried here 2026-07-11 and TESTED-FAILED: byte-identical reload fault.
+     * A second DeclSourceRebuild does NOT promote the blob to permanent. Removed. Leading remaining lead: our
+     * committed decl is UNREGISTERED in the declManager -- see the "first apply not findable by reg-id" note below
+     * -- while a normally-placed entity's decl IS registered; registration is the likely blob-permanence factor.) */
+
     uint8_t tmpDef[TEMP_DEF_SIZE];
+    memset(tmpDef, 0, sizeof tmpDef);   /* CRITICAL: zero before the ctor -- matches the serialize/prefab paths
+                                         * (lines ~395/916/964) AND OG's commit FUN_1800045a0, which zeros its
+                                         * whole temp-def stack region before 0x5e9400. Without this, members the
+                                         * ctor doesn't fully init keep stack GARBAGE; g_def_dtor below then frees a
+                                         * garbage idStr pointer -> "Memory corruption before block" AV in IdStrDtor
+                                         * on reload-teardown (the acctargets/bss/timeline save->reload crash). */
     int def_ctored = 0, applied = 0;
     __try {
         g_def_ctor(tmpDef); def_ctored = 1;                /* 0x5e9400 */
@@ -615,8 +649,22 @@ static int ae_apply_one(int id, const char *patched_text)
             void *srcPtr = *(void * const *)(tmpDef + TDEF_SOURCE_OFF);   /* normalized source-text ptr */
             void *clsPtr = *(void * const *)(tmpDef + TDEF_CLASS_OFF);    /* normalized classname idStr-data */
             void *inhPtr = *(void * const *)(tmpDef + TDEF_INHERIT_OFF);  /* normalized inherit idStr-data */
+#if AE_APPLY_DIAG_ON
+            {
+                int slen = -1, clen = -1, ilen = -1;
+                __try { slen = srcPtr ? (int)strlen((const char *)srcPtr) : -1; } __except (EXCEPTION_EXECUTE_HANDLER) { slen = -2; }
+                __try { clen = clsPtr ? (int)strlen((const char *)clsPtr) : -1; } __except (EXCEPTION_EXECUTE_HANDLER) { clen = -2; }
+                __try { ilen = inhPtr ? (int)strlen((const char *)inhPtr) : -1; } __except (EXCEPTION_EXECUTE_HANDLER) { ilen = -2; }
+                AE_APPLY_DIAG("apply id=%d: textlen=%d srcPtr=%p slen=%d clsPtr=%p clen=%d cls='%.48s' inhPtr=%p ilen=%d inh='%.48s'",
+                              id, (int)strlen(patched_text), srcPtr, slen, clsPtr, clen,
+                              (clen >= 0 ? (const char *)clsPtr : "?"), inhPtr, ilen, (ilen >= 0 ? (const char *)inhPtr : "?"));
+                if (slen >= 0) AE_APPLY_DIAG("apply id=%d: src head='%.220s'", id, (const char *)srcPtr);
+                if (slen >= 0 && slen > 200) AE_APPLY_DIAG("apply id=%d: src tail='%.120s'", id, (const char *)srcPtr + slen - 120);
+            }
+#endif
             /* the source rebuild carries the EDIT (the temp's canonical source includes the leaf) -- always. */
             g_decl_rebuild(defsub, (const char *)srcPtr, 1);             /* 0x17ae560 */
+            AE_APPLY_DIAG("apply id=%d: decl_rebuild returned", id);
             /* class/inherit: with a full entity these are real values; null OR EMPTY -> skip (keep the live
              * defsub value). The empty-string guard is the timeline-save CRASH FIX: a complex componentTimeLine
              * can make StructDeserialize("idSnapEntity") choke and leave the temp's class/inherit BLANK; without
@@ -628,7 +676,14 @@ static int ae_apply_one(int id, const char *patched_text)
              * (snapmaps/editor_only/placeholder_target) instead of blanking it. This makes a choked timeline
              * edit fail SAFE (entity intact, edit didn't apply) rather than fatal. */
             if (clsPtr && *(const char *)clsPtr) g_idstr_assign((uint8_t *)defsub + DEFSUB_CLASS_OFF, (const char *)clsPtr);
+            AE_APPLY_DIAG("apply id=%d: class assign done", id);
             if (inhPtr && *(const char *)inhPtr) g_idstr_assign((uint8_t *)defsub + DEFSUB_INHERIT_OFF, (const char *)inhPtr);
+            AE_APPLY_DIAG("apply id=%d: inherit assign done -- commit complete", id);
+
+            /* (SETTLE re-serialize REMOVED 2026-07-10: the "unsettled decl" theory was disproven -- OG's entity is
+             * +0x48=0x10400 too. It didn't fix the crash and its extra EntityClone may compound the COW share
+             * (refcount) that is the ACTUAL root cause -- see the refcount-2-vs-1 finding in the investigation
+             * notes. The real fix is keeping the entity UNIQUE (refcount 1) like OG, not settling it.) */
             applied = 1;
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -766,7 +821,16 @@ static void ae_toast_result(const char *op, int applied, int total)
      * new information (it's the same op every Qt sh_apply-style caller shares, hence the fixed
      * "SnapStack" label, which reads as unrelated to a Prefabs-tab action). Skip it for that op only;
      * the Qt mkcmd command has no toast of its own, so it still needs this one. */
-    if (iface && iface->vtbl && iface->vtbl->toast && strcmp(op, "load-prefab") != 0)
+    /* quiet the generic "applied N/N" toast for ops that either show their OWN actionable toast or are
+     * internal housekeeping the user never triggered:
+     *   load-prefab        -> the Prefabs tab already toasts "staged -- press Ctrl+V".
+     *   tl-inherit-portable -> the one-shot palette-timeline inherit normalize (sh_timeline_normalize_inherit),
+     *                          fired by the sh_tabs poll, NOT a user action -> a toast on every logic selection
+     *                          is pure noise.
+     *   accl / acctargets   -> do_acc emits a nicer, target-count + receiver toast instead. */
+    int quiet = (strcmp(op, "load-prefab") == 0) || (strcmp(op, "tl-inherit-portable") == 0) ||
+                (strcmp(op, "accl") == 0)         || (strcmp(op, "acctargets") == 0);
+    if (iface && iface->vtbl && iface->vtbl->toast && !quiet)
         iface->vtbl->toast(iface, "SnapStack", text);
     /* ALSO log directly -- the toast slot logs too, but a no-editor/late drain might skip the engine toast. */
     char line[200];
@@ -841,6 +905,94 @@ static int slot_serialize_entity(sh_iface *self, int id, char *out_json, int cap
     return ae_serialize_to_json("idSnapEntity", cloneBase, out_json, cap);
 }
 
+/* PLACEHOLDER inherit a palette-placed Timeline is spawned with (see the +0x298 slot doc in
+ * snaphak_iface.h for the why) -- and the portable value it gets normalized to. */
+#define TL_PLACEHOLDER_INHERIT "snapmaps/editor_only/placeholder_target"
+#define TL_PORTABLE_INHERIT    "snapmaps/unknown"
+/* Matches sh_timeline.cpp's own SH_TL_JSON_CAP exactly -- Qt's tl_iface_serialize_entity has used this
+ * size (heap via std::string::resize, freed after the call) for the same "full timeline-entity JSON"
+ * job all along with no issue. An earlier version of this function used two STATIC 1 MB buffers instead
+ * (2 MB of permanently-resident BSS the Qt path never carries) -- confirmed via a controller-freelook
+ * regression during live testing to be a real problem, reverted, and redesigned to this transient
+ * heap-alloc/free shape specifically to match Qt's already-proven-safe footprint. */
+#define TL_NORMALIZE_BUF_CAP   (256 * 1024)
+
+/* Raw string splice (NOT a JSON re-parse, which would drop the engine-required float ".0"): replace every
+ * occurrence of TL_PLACEHOLDER_INHERIT in `src` with TL_PORTABLE_INHERIT into `out` (cap-bounded). Returns
+ * the number of replacements made (0 = no match / didn't fit -> caller treats as "nothing to do"). */
+static int tl_splice_portable_inherit(const char *src, char *out, int cap)
+{
+    static const char ph[] = TL_PLACEHOLDER_INHERIT;
+    static const char pv[] = TL_PORTABLE_INHERIT;
+    const int phlen = (int)(sizeof(ph) - 1), pvlen = (int)(sizeof(pv) - 1);
+    int replaced = 0, w = 0;
+    const char *p = src;
+    while (*p) {
+        if (strncmp(p, ph, (size_t)phlen) == 0) {
+            if (w + pvlen >= cap) return 0;   /* would overflow -- bail, no partial commit */
+            memcpy(out + w, pv, (size_t)pvlen); w += pvlen; p += phlen;
+            replaced++;
+        } else {
+            if (w + 1 >= cap) return 0;
+            out[w++] = *p++;
+        }
+    }
+    out[w] = '\0';
+    return replaced;
+}
+
+/* +0x298 (ext 6) TIMELINE PORTABLE-INHERIT NORMALIZE -- see the full doc comment on
+ * sh_normalize_timeline_inherit_fn in snaphak_iface.h. Cheap defsub-inherit read first (no serialize/no
+ * alloc) so this is safe to call every tick on every Timeline-classed id; only a placeholder match pays
+ * for the malloc+serialize+splice+commit+free. Commits via ae_apply_one directly (the SAME body +0x290
+ * apply_sync calls for kind=0) INLINE on the calling thread -- whichever thread that is is, by
+ * construction, the caller's own safe commit point (matching the +0x290 guarantee). Both scratch buffers
+ * are heap-allocated per call and freed before returning -- no persistent static/BSS footprint, matching
+ * Qt's own tl_iface_serialize_entity (std::string::resize, same 256 KB cap, same freed-after-use shape). */
+static int slot_normalize_timeline_inherit(sh_iface *self, int id)
+{
+    (void)self;
+    int result = 0;
+    char *json = NULL, *patched = NULL;
+    __try {
+        void *array = NULL; uint32_t count = 0;
+        if (!ae_entity_array(&array, &count)) { result = 0; goto done; }
+        void *ent = ae_entity_ptr(array, count, id);
+        if (!ent) { result = 0; goto done; }
+        void *defsub = NULL;
+        if (!ae_read_ptr((const uint8_t *)ent + ENT_DEFSUB_OFF, &defsub) || defsub == NULL) { result = 0; goto done; }
+        /* RE-FIRE GATE -- check the decl-source BLOB (defsub+0x38), NOT the raw inherit idStr (defsub+0x58).
+         * ae_apply_one rebuilds the blob from the CURRENT defsub+0x58 (DeclSourceRebuild) BEFORE it assigns
+         * the new inherit, so the blob lags one commit behind the raw field: after the first commit the raw
+         * field reads 'snapmaps/unknown' but the blob still reads the placeholder. get_inherit reads this
+         * blob AND the map save serializes it, so if we gated on the raw field we'd commit exactly ONCE and
+         * leave the blob (hence the Inherit box + the saved map) stuck on the placeholder forever. Gating on
+         * the blob instead keeps this firing across successive rescans (each triggered by the raw field's
+         * id-string change) until a commit's DeclSourceRebuild finally bakes 'unknown' into the blob -- this
+         * is the exact self-correcting behavior Qt's original sh_tabs get_inherit gate relied on (the
+         * "repeated commits" seen in the log are load-bearing, not waste). A raw-field gate here was tried
+         * 2026-07-12 and confirmed to leave both frontends stuck on the placeholder. */
+        void *blob = NULL;
+        if (!ae_read_ptr((const uint8_t *)defsub + DECL_BLOB_OFF, &blob) || !blob) { result = 0; goto done; }
+        if (!strstr((const char *)blob, TL_PLACEHOLDER_INHERIT)) { result = 0; goto done; }   /* blob already portable */
+
+        json = (char *)malloc(TL_NORMALIZE_BUF_CAP);
+        if (!json) { result = 0; goto done; }
+        int n = slot_serialize_entity(self, id, json, TL_NORMALIZE_BUF_CAP);
+        if (n <= 0) { result = 0; goto done; }
+
+        patched = (char *)malloc(TL_NORMALIZE_BUF_CAP);
+        if (!patched) { result = 0; goto done; }
+        if (tl_splice_portable_inherit(json, patched, TL_NORMALIZE_BUF_CAP) <= 0) { result = 0; goto done; }
+
+        result = ae_apply_one(id, patched) ? 1 : 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { result = 0; }
+done:
+    if (json) free(json);
+    if (patched) free(patched);
+    return result;
+}
+
 /* +0xd0 SCHEDULE a batch of apply-items at the engine command-exec point (FIX B). Deep-copies the items
  * (incl. the text strings) into the pending store, registers clone_bss_apply, BufferCommandTexts it. */
 static int slot_schedule_apply(sh_iface *self, const sh_apply_item *items, int count, const char *op_label)
@@ -885,19 +1037,21 @@ static int slot_schedule_apply(sh_iface *self, const sh_apply_item *items, int c
     return enq;
 }
 
-/* PUBLIC (Fix B): enqueue a kind=3 targets-write {source, target}. The target id travels as a decimal string in
- * the item text (the drain parses it back). The actual serialize+splice+apply runs on the DOOM main thread via
- * the clone_bss_apply command. Called by the sh_target_any confirm hook (wiring_cleandirect) once per wire-any
- * timeline pick, INSTEAD of the stock creator laying an (invalid, dangling) CSR edge to the timeline. */
+/* PUBLIC: write the timeline TARGET's id into the SOURCE entity's state.edit.targets (serialize -> splice ->
+ * ae_apply_one). Called by the sh_target_any confirm hook (wiring_cleandirect) INSTEAD of laying an (invalid,
+ * dangling) CSR edge to a bare timeline target.
+ *
+ * COMMITS INLINE (OG-faithful, 2026-07-12): runs NOW on the calling thread, NOT deferred to clone_bss_apply.
+ * The wire hook already runs on the DOOM main thread (a decl-safe point where reflect resolves), so an inline
+ * commit is correct and avoids the deferred double-free the SnapStack decl-edits hit (the +0x290 sync-apply
+ * fix -- see docs/backend-changes.md). This path is DORMANT today (sh_target_any targets via SnapMap's native
+ * input/output nodes and writes NO decl; only `acctargets` writes a targets list), but it is the natural
+ * primitive for a future UI-driven "add target" feature -- keeping it on the inline path means that feature is
+ * crash-correct by default. SEH-guarded inside ae_apply_target_write; a bad state degrades to a no-op. */
 void ae_schedule_target_write(int source_id, int target_id)
 {
-    char tgt[16];
-    _snprintf_s(tgt, sizeof tgt, _TRUNCATE, "%d", target_id);
-    sh_apply_item it;
-    it.kind = 3;
-    it.id   = source_id;
-    it.text = tgt;
-    slot_schedule_apply(NULL, &it, 1, "wire-target");
+    __try { ae_apply_target_write(source_id, target_id); }
+    __except (EXCEPTION_EXECUTE_HANDLER) {}
 }
 
 /* +0xb8 READ-BACK the editor's pending prefab (editor+0x209a8) -> idSnapEntityPrefab JSON (the reference implementation
@@ -1002,14 +1156,46 @@ static int slot_serialize_selection(sh_iface *self, char *out_json, int cap)
     return written;
 }
 
+/* +0x290 (ext 5) SYNCHRONOUS inline apply -- the OG-faithful commit path. Runs the apply batch RIGHT NOW on
+ * the CALLING (UI/think-loop) thread, exactly like OG's acctargets handler (FUN_18000228c) which calls its
+ * +0xd0 commit (FUN_180004b80) INLINE. This REPLACES the deferred clone_bss_apply route for the SnapStack
+ * decl-edit ops: the deferral (FIX B) split serialize (UI thread) from commit (DOOM main thread, a later
+ * frame), which left the committed decl-source block DOUBLE-OWNED -> the play->teardown double-free
+ * (acctargets/bss "Memory corruption before block"). OG never defers -- it commits inline on the SAME
+ * UI/think-loop thread where the serialize already runs successfully (so reflect IS resolvable there;
+ * slot_serialize_entity proves it), giving the block a single clean owner. Each ae_apply_one is SEH-guarded,
+ * so if the deserialize ever DID fault off-main it degrades to 0-applied, never a crash. Returns applied
+ * count. Same batch semantics as slot_schedule_apply (kind 0=decl edit / 1=mkcmd / 3=target-write) but
+ * inline -- text is caller-owned + valid for the call, so NO deep copy / pending store is needed. */
+static int slot_apply_sync(sh_iface *self, const sh_apply_item *items, int count, const char *op_label)
+{
+    (void)self;
+    if (!items || count <= 0 || count > APPLY_MAX_ITEMS) return 0;
+    if (!ae_editor_session()) return 0;
+    int applied = 0;
+    for (int i = 0; i < count; i++) {
+        if (!items[i].text) continue;
+        int ok = (items[i].kind == 1) ? ae_mkcmd_one(items[i].text)
+               : (items[i].kind == 3) ? ae_apply_target_write(items[i].id, atoi(items[i].text))
+                                      : ae_apply_one(items[i].id, items[i].text);
+        if (ok) applied++;
+    }
+    ae_toast_result(op_label ? op_label : "apply", applied, count);
+    return applied;
+}
+
 /* ============================================================ slot export + install ================ */
 void sh_apply_engine_get_slots(sh_serialize_entity_fn *serialize_entity,
                                sh_schedule_apply_fn   *apply_edit,
-                               sh_read_prefab_fn      *read_prefab)
+                               sh_read_prefab_fn      *read_prefab,
+                               sh_apply_sync_fn       *apply_sync,
+                               sh_normalize_timeline_inherit_fn *normalize_timeline_inherit)
 {
     if (serialize_entity) *serialize_entity = slot_serialize_entity;
     if (apply_edit)       *apply_edit       = slot_schedule_apply;
     if (read_prefab)      *read_prefab      = slot_read_prefab;
+    if (apply_sync)       *apply_sync       = slot_apply_sync;
+    if (normalize_timeline_inherit) *normalize_timeline_inherit = slot_normalize_timeline_inherit;
 }
 
 /* expose the +0xb0 serialize-selection body so sh_iface_engine folds it into the single bind. */

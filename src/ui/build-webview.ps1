@@ -35,13 +35,15 @@ $vcvars = "$vs\VC\Auxiliary\Build\vcvars64.bat"
 if (-not (Test-Path $vcvars)) { throw "vcvars64.bat not found at $vcvars" }
 
 # --- 2. WebView2 SDK (NuGet) --------------------------------------------------------------------------
+# Pinned (not "latest") -- api.nuget.org's index.json lists prerelease builds interleaved with stable
+# ones, so $idx.versions[-1] (the literal last entry) can silently land a "-prerelease" SDK. Bump this
+# deliberately when picking up a new stable release.
+$wvPinnedVersion = "1.0.4078.44"
 $wvInclude = Join-Path $sdkDir "build\native\include"
 $wvLib     = Join-Path $sdkDir "build\native\x64\WebView2LoaderStatic.lib"
 if (-not (Test-Path (Join-Path $wvInclude "WebView2.h"))) {
-    Write-Host "Fetching Microsoft.Web.WebView2 SDK from NuGet..."
-    $idx = Invoke-RestMethod "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/index.json"
-    $ver = $idx.versions[-1]
-    Write-Host "  latest version: $ver"
+    Write-Host "Fetching Microsoft.Web.WebView2 SDK $wvPinnedVersion from NuGet..."
+    $ver = $wvPinnedVersion
     $url = "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/$ver/microsoft.web.webview2.$ver.nupkg"
     $zip = Join-Path $build "webview2.$ver.zip"
     Invoke-WebRequest -Uri $url -OutFile $zip
@@ -92,8 +94,13 @@ $libArgs = @(
 ) -join " "
 $implib = $Out -replace '\.dll$', '.lib'
 
+# Output -> build\webview\ (its OWN subfolder, distinct from build\qt\ -- both frontends build a file
+# literally named snaphakui.dll; without separate folders, building one after the other would silently
+# overwrite the other in build\. The backend, XINPUT1_3.dll, has no per-frontend variant and stays
+# directly in build\.)
+New-Item -ItemType Directory -Force (Join-Path $build "webview") | Out-Null
 $cl  = "cl /nologo /LD /O2 /W3 /EHsc /std:c++17 /MD /DWIN32 /D_WINDOWS /Fo..\..\build\obj\uiwv\ " +
-       "$incArgs $srcArgs /Fe:..\..\build\$Out " +
+       "$incArgs $srcArgs /Fe:..\..\build\webview\$Out " +
        "/link /DEF:snaphakui.def /IMPLIB:..\..\build\obj\uiwv\$implib $libArgs"
 $cmd = "cd /d `"$here`" && `"$vcvars`" && $cl"
 
@@ -102,4 +109,4 @@ cmd /c "$cmd > `"$buildLog`" 2>&1"
 $clExit = $LASTEXITCODE
 Get-Content $buildLog | Write-Host
 if ($clExit -ne 0) { throw "cl failed (exit $clExit) -- see $buildLog" }
-Write-Host "built $(Join-Path $build $Out) (Qt-free WebView2 POC)"
+Write-Host "built $(Join-Path $build "webview\$Out") (Qt-free WebView2 POC)"
