@@ -6,6 +6,8 @@
 #   1. locate MSVC via vswhere -> vcvars64.
 #   2. fetch the Microsoft.Web.WebView2 SDK (headers + static loader lib) from NuGet into
 #      build\webview2sdk (gitignored) if not already there. NO binaries land in the repo.
+#   2b. best-effort refresh of the embedded menubar logo from the GitHub org avatar (offline-safe:
+#      any fetch failure keeps the committed copy; a real change rewrites mockup.html -> commit it).
 #   3. generate build\obj\uiwv\mockup_html.h from webview\mockup.html (the UI, embedded in the DLL).
 #   4. cl-compile webview\snaphak_ui_webview.cpp + sl_exports.cpp -> build\snaphakui.dll, statically
 #      linking WebView2LoaderStatic.lib (no WebView2Loader.dll to ship).
@@ -55,10 +57,42 @@ if (-not (Test-Path (Join-Path $wvInclude "WebView2.h"))) { throw "WebView2.h mi
 if (-not (Test-Path $wvLib)) { throw "WebView2LoaderStatic.lib missing after SDK fetch ($wvLib)" }
 Write-Host "WebView2 SDK ready at $sdkDir"
 
-# --- 3. embed the HTML --------------------------------------------------------------------------------
-# Wrap mockup.html verbatim in a C++ raw string literal so the DLL carries the UI with no shipped file.
+# --- 2b. sync the menubar logo from the org avatar (best-effort, offline-safe) ------------------------
+# The menubar logo is the GitHub org avatar (github.com/snaphak), carried inside mockup.html as a base64
+# data URI (the page is loaded from a string in-game, so no file or URL would resolve at runtime). Each
+# build refreshes that copy: fetch the 64px avatar, and if it downloads, is a real JPEG/PNG, and differs
+# from what's embedded, rewrite the data URI in mockup.html -- the change then shows up in git like any
+# source edit. ANY failure (offline, timeout, junk response, unexpected HTML shape) just keeps the
+# committed copy and never fails the build.
 $htmlPath = Join-Path $here "webview\mockup.html"
 if (-not (Test-Path $htmlPath)) { throw "mockup.html not found at $htmlPath" }
+$logoTmp = Join-Path $objDir "org_avatar.tmp"
+try {
+    & curl.exe -sL --max-time 8 -o $logoTmp "https://github.com/snaphak.png?size=64" 2>$null
+    $ok = (Test-Path $logoTmp) -and ((Get-Item $logoTmp).Length -gt 0) -and ((Get-Item $logoTmp).Length -lt 65536)
+    if ($ok) {
+        $logoBytes = [IO.File]::ReadAllBytes($logoTmp)
+        $mime = $null
+        if ($logoBytes.Length -gt 3 -and $logoBytes[0] -eq 0xFF -and $logoBytes[1] -eq 0xD8) { $mime = "image/jpeg" }
+        elseif ($logoBytes.Length -gt 7 -and $logoBytes[0] -eq 0x89 -and $logoBytes[1] -eq 0x50) { $mime = "image/png" }
+        if ($mime) {
+            $logoUri = "data:$mime;base64," + [Convert]::ToBase64String($logoBytes)
+            $htmlRaw = Get-Content -Raw -Path $htmlPath
+            $m = [regex]::Matches($htmlRaw, 'data:image/(?:jpeg|png);base64,[A-Za-z0-9+/=]+')
+            if ($m.Count -eq 1) {
+                if ($m[0].Value -ne $logoUri) {
+                    $htmlRaw = $htmlRaw.Substring(0, $m[0].Index) + $logoUri + $htmlRaw.Substring($m[0].Index + $m[0].Length)
+                    [IO.File]::WriteAllText($htmlPath, $htmlRaw, (New-Object System.Text.UTF8Encoding $false))
+                    Write-Host "logo: refreshed from the org avatar ($($logoBytes.Length) bytes, $mime) -- mockup.html updated, commit it"
+                } else { Write-Host "logo: embedded copy is up to date with the org avatar" }
+            } else { Write-Host "logo: skipped -- expected exactly 1 base64 data URI in mockup.html, found $($m.Count)" }
+        } else { Write-Host "logo: skipped -- fetched data is not a JPEG/PNG" }
+    } else { Write-Host "logo: skipped -- avatar fetch failed, empty, or implausibly large (offline?)" }
+} catch { Write-Host "logo: skipped -- $($_.Exception.Message)" }
+if (Test-Path $logoTmp) { Remove-Item $logoTmp -Force }
+
+# --- 3. embed the HTML --------------------------------------------------------------------------------
+# Wrap mockup.html verbatim in a C++ raw string literal so the DLL carries the UI with no shipped file.
 $html = Get-Content -Raw -Path $htmlPath
 
 # Inline the decl editor's generated schema table (webview\schema_slice.js) in place of its <script src>
