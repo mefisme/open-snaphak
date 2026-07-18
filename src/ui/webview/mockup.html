@@ -120,8 +120,8 @@
   .focus-head { display: none; align-items: center; gap: 6px; }
   .editor-col.focus-mode .focus-head { display: flex; }
   .focus-head .hint { font-size: 10px; }
-  /* CLONE EXTENSION: restores the Qt clone's read-only entity_id_lineedit (the resolved id-string --
-   * module path + inherit leaf) that this webview dropped -- the identity block at the top of the Entity
+  /* CLONE EXTENSION: the read-only entity-id line (the resolved id-string --
+   * module path + inherit leaf; the original's entity_id_lineedit) -- the identity block at the top of the Entity
    * State panel. Same value the entity list already shows + "Copy ID" already copies; this just makes it
    * visible + selectable while editing a single entity. */
   .ident { display: flex; flex-direction: column; gap: 3px; padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 8px; flex-shrink: 0; }
@@ -175,7 +175,7 @@
   .prob .loc { color: var(--muted); flex-shrink: 0; }
 
   /* CLONE EXTENSION: collapsible Inherit/Classname description panel -- content from sh_entity_desc.h
-   * (OUR RE-extracted descriptions), mirrors the Qt clone's always-open desc box but tucked away by
+   * (OUR RE-extracted descriptions), mirrors the original's always-open desc box but tucked away by
    * default so it doesn't cost permanent screen real estate. */
   .desc-panel { flex-shrink: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); cursor: pointer; }
   .desc-toggle { display: flex; align-items: center; gap: 6px; padding: 6px 9px; color: var(--muted); user-select: none; border-radius: 6px; }
@@ -418,8 +418,8 @@
       <div class="panel-head">
         <span class="panel-title">Prefab Details</span>
         <div class="panel-actions">
-          <button class="btn danger" id="prefabDeleteBtn">Delete</button>
-          <button class="btn primary" id="prefabLoadBtn">Load / Place</button>
+          <button class="btn danger" id="prefabDeleteBtn" disabled title="Select a prefab first">Delete</button>
+          <button class="btn primary" id="prefabLoadBtn" disabled title="Select a prefab first">Load / Place</button>
         </div>
       </div>
       <div class="panel-body placeholder" id="pcEmpty">Select a prefab to see its details.</div>
@@ -1453,7 +1453,7 @@
     }
     return pairs;
   }
-  // Classify a catalog arg TYPE NAME into a widget kind -- ports the Qt clone's tl_classify_arg (sh_timeline.cpp).
+  // Classify a catalog arg TYPE NAME into a widget kind -- the same classification the original applies.
   // Every kind gets a real editable widget: 'bool' a checkbox, 'vecn' a per-component field row, 'decl'/'enum'
   // a dropdown constrained to real engine values (via the shared enum_decls_of_resclass round-trip -- see
   // tlRenderArgCombo/argResclassCache), 'entity' the SAME "Runs on" picker dropdown sourced from allEntities
@@ -1471,7 +1471,7 @@
       return 'text';
     if (typeName && typeName.indexOf('idDecl') === 0) return 'decl';
     if (TL_DECL_ALIASES[typeName]) return 'decl';
-    return 'enum';   // catch-all (matches Qt's SH_ARG_ENUM default: a non-builtin, non-decl type name)
+    return 'enum';   // catch-all (matches the original's enum default: a non-builtin, non-decl type name)
   }
   // Reduce a decl-pointer arg-type-name to its decl-type SHORT-NAME -- the on-disk nested key, {"decl":{<short>:name}}.
   // idDecl<X>* -> strip "idDecl" + lowercase + drop '*' ("idDeclProjectile*" -> "projectile"); a non-"idDecl"
@@ -1515,7 +1515,7 @@
     if (kind === 'enum') { var e2 = {}; e2[typeName] = ''; return e2; }   // flat {<enumType>:<MEMBER>}, same shape as 'text'
     return {};
   }
-  // "<name>  (<type>)" -- same label convention as the Qt clone's tl_arg_label. Falls back to the type name
+  // "<name>  (<type>)" -- the same label convention the original uses. Falls back to the type name
   // alone if the catalog didn't give this arg a name (some engine args are positional-only), and to
   // "(unknown arg)" if there's no schema at all for this position (an unrecognized/hand-typed eventDef, or
   // more stored args than the catalog says this event takes).
@@ -1586,7 +1586,7 @@
     var kind = argSchema ? tlClassifyArg(argSchema.type) : 'unknown';
     var label = esc(tlArgLabel(argSchema));
     // per-entity asset dropdown (Stage 3, "exceed-the-OG") -- checked BEFORE the normal kind dispatch below,
-    // same order as Qt's tl_build_arg_widget. An unmatched category (wrong arg name/type, no resolved slug,
+    // same precedence order as the original's arg-widget builder. An unmatched category (wrong arg name/type, no resolved slug,
     // or the entity's asset list for that category is empty) falls through to the normal widget untouched.
     var asset = tlAssetCategoryFor(argSchema, tabEntitySlug);
     if (asset) {
@@ -1705,8 +1705,8 @@
   }
 
   // ================================================================ COMMIT (tlModel -> nested decl JSON) ====
-  // Ports the Qt clone's COMMIT side (sh_timeline.cpp tl_build_component_json/tl_build_entity_event_json/
-  // tl_build_event_json/tl_build_arg_json/tl_resolve_entity_ref/tl_patch_component + sh_timeline_commit) --
+  // The commit side (the component/entity-event/event/arg builders + the entity-ref resolve + the
+  // component patch, matching the original's commit behavior) --
   // rebuild componentTimeLine/encounterComponent from the LIVE UI model, patch it into a FRESH re-serialize
   // of the entity (not the stale open-time snapshot -- something else may have edited the entity while this
   // panel was open, e.g. moved it in the 3D view; patching onto stale data would silently revert that), then
@@ -1715,8 +1715,8 @@
   // The engine's OWN id_to_string appends " (no module)" for a global/no-module entity -- real live-entity
   // display text (tlEntityLabel already shows it), but NOT part of the engine's own name-intern table, so
   // committing it verbatim produces an entity ref that can never resolve: the map "saves" fine and then
-  // faults at PLAY time when the timeline tries to resolve it. Must be stripped before commit (Qt does the
-  // same in tl_resolve_entity_ref).
+  // faults at PLAY time when the timeline tries to resolve it. Must be stripped before commit (the
+  // original strips it the same way).
   function tlStripNoModuleSuffix(ref) {
     var suffix = ' (no module)';
     if (ref && ref.length >= suffix.length && ref.slice(-suffix.length) === suffix) return ref.slice(0, -suffix.length);
@@ -1742,8 +1742,8 @@
   }
   // Coerce a stored arg value back to the JSON TYPES the engine's arg reader expects -- our live-edit model
   // keeps float/int/vecn components as STRINGS (so a half-typed "2." mid-edit doesn't get mangled -- see the
-  // .ev-time/.ev-arg-input input handlers), but the on-disk shape needs real JSON numbers there (Qt's
-  // tl_build_arg_json does QJsonValue(atof(...))/atoi(...) for exactly this reason -- a JSON STRING where the
+  // .ev-time/.ev-arg-input input handlers), but the on-disk shape needs real JSON numbers there (the
+  // original converts with atof/atoi at commit for exactly this reason -- a JSON STRING where the
   // engine expects a NUMBER either fails to parse or silently misbehaves). bool/decl/enum/text/asset values
   // are already the right JS type and pass through untouched.
   function tlCommitArgValue(argVal, argSchema) {
@@ -1766,8 +1766,8 @@
     return out;
   }
   // One event: {eventCall:{"\neventHandle_t eventDef":name, args:{item[0]:..,"\nnum":K}}, eventTime?:N}.
-  // eventTime is OMITTED unless the typed value parses as a clean non-negative integer -- matches Qt's exact
-  // gate (OG FUN_180011a88's toUInt check); a fractional or non-numeric Time field silently drops eventTime
+  // eventTime is OMITTED unless the typed value parses as a clean non-negative integer -- matches the
+  // original's exact gate (OG FUN_180011a88's toUInt check); a fractional or non-numeric Time field silently drops eventTime
   // rather than committing something the engine's own reader would reject.
   function tlBuildEventJson(ev, schema) {
     var argsObj = {};
@@ -1775,7 +1775,7 @@
       var argSchema = schema && schema.args[a];
       argsObj['item[' + a + ']'] = tlCommitArgValue(ev.args[a], argSchema);
     }
-    argsObj['\nnum'] = ev.args.length;   // args' count key is "\nnum" (leading newline) -- matches the engine's own raw dump spelling for THIS pseudo-list specifically; events/entityEvents below use plain "num" (verified against Qt's tl_build_event_json/tl_build_entity_event_json/tl_build_component_json -- NOT a typo, an asymmetry in the real dump).
+    argsObj['\nnum'] = ev.args.length;   // args' count key is "\nnum" (leading newline) -- matches the engine's own raw dump spelling for THIS pseudo-list specifically; events/entityEvents below use plain "num" (verified against the engine's real dump -- NOT a typo, an asymmetry in the dump itself).
     var out = { eventCall: { '\neventHandle_t eventDef': ev.eventDef || '', args: argsObj } };
     var t = String(ev.time).trim();
     if (/^\d+$/.test(t)) out.eventTime = parseInt(t, 10);
@@ -1793,8 +1793,8 @@
   }
   // The full componentTimeLine/encounterComponent object: {entityEvents:{item[0]:..,num:K}}. Deliberately NO
   // top-level "num" beside entityEvents -- the engine serializes this as an OBJECT (not a list), so only
-  // entityEvents itself carries a count (Qt's tl_build_component_json comment: a spurious top-level num
-  // measurably diverged from the engine's own baseline in their round-trip test).
+  // entityEvents itself carries a count (a spurious top-level num
+  // measurably diverged from the engine's own baseline in round-trip testing).
   function tlBuildComponentJson() {
     var entityEvents = {};
     for (var t = 0; t < tlModel.tabs.length; t++) entityEvents['item[' + t + ']'] = tlBuildEntityEventJson(tlModel.tabs[t]);
@@ -1812,8 +1812,8 @@
     // NOTE the `=== null` checks: a freshly-placed Timeline serializes as `edit = NULL;` -> "state":{"edit":null}
     // (or "state":null), and in JS `typeof null === 'object'`, so a bare `typeof x !== 'object'` guard would let
     // the null through and the `edit[compKey] = ...` assignment below would throw "cannot set property of null"
-    // -- an UNCAUGHT throw that silently aborts the whole save (no toast, no commit). This was the webview-only
-    // "fresh timeline won't save until copy/paste or map save+reload" bug (Qt uses QJsonObject, never hits it).
+    // -- an UNCAUGHT throw that silently aborts the whole save (no toast, no commit). This was the
+    // "fresh timeline won't save until copy/paste or map save+reload" bug.
     if (typeof doc.entityDef.state !== 'object' || doc.entityDef.state === null) doc.entityDef.state = {};
     if (typeof doc.entityDef.state.edit !== 'object' || doc.entityDef.state.edit === null) doc.entityDef.state.edit = {};
     var compKey = tlModel.isEncounter ? 'encounterComponent' : 'componentTimeLine';
@@ -1864,13 +1864,13 @@
     if (!entityInheritRequested[eid]) { entityInheritRequested[eid] = true; post({cmd:'resolveEntityInherit', eid: eid}); }
     return null;
   }
-  // Does this arg qualify for a per-entity asset dropdown, and if so which category? Ports the Qt clone's
-  // tl_build_arg_widget asset-list special-cases (checked BEFORE the normal tlClassifyArg dispatch): modelIndex
+  // Does this arg qualify for a per-entity asset dropdown, and if so which category? The
+  // asset-list special-cases (checked BEFORE the normal tlClassifyArg dispatch): modelIndex
   // is matched by ARG NAME (its catalog type is already "int"); animWebPath/md6Anim/animAlias by ARG TYPE;
   // tag/tagName by ARG NAME with the on-disk key forced to "string" regardless of the arg's own catalog type
   // (matches tl_reduce_arg_key's explicit "name-keyed; on-disk key stays string" comment). An entity class with
   // no data for a category (or no resolved slug at all) returns null -- the caller's normal dispatch still
-  // applies, faithful to Qt's own "empty enumeration -> plain box" fallback.
+  // applies, faithful to the original's "empty enumeration -> plain box" fallback.
   function tlAssetCategoryFor(argSchema, slug) {
     if (!argSchema || !slug) return null;
     var ea = entityAssetsBySlug[slug];
@@ -1889,7 +1889,7 @@
   // Reverse-lookup: given a stored raw VALUE (e.g. a model index "0", or a full md6anim path), find the
   // friendly DISPLAY text to show in the field. Falls back to the raw value itself when it isn't in the
   // list (an entity whose asset data changed since this event was authored, or a hand-typed value) --
-  // matches Qt's QComboBox::findData -> setEditText(raw) fallback.
+  // matches the original's combo fallback (QComboBox::findData -> setEditText(raw)).
   function tlAssetDisplayFor(items, rawValue) {
     for (var i = 0; i < items.length; i++) if (items[i].value === rawValue) return items[i].display;
     return rawValue;
@@ -1948,7 +1948,7 @@
   // {display,value} objects (asset lists, where e.g. a model's shown NAME differs from its stored index/path);
   // each option's data-value carries the real value to write, separate from the friendly text shown/typed.
   // An empty/not-yet-fetched cache degrades to "no known values -- free text is fine" rather than blocking
-  // the field, matching Qt's own fallback when the engine enumeration (or the asset list) comes back empty.
+  // the field, matching the original's own fallback when the engine enumeration (or the asset list) comes back empty.
   function tlRenderArgCombo(comboEl, showAll) {
     var inputEl = comboEl.querySelector('.ev-arg-input');
     var listEl = comboEl.querySelector('.combo-list');
@@ -2088,7 +2088,7 @@
         var ev = tab.events[j];
         // schema = the catalog's arg list for THIS eventDef (or undefined for an unrecognized/hand-typed
         // name) -- ev.args[a] is matched to schema.args[a] BY POSITION (the on-disk shape only keys each arg
-        // by its type name, not its name, so position is the only reliable correlation -- same as Qt).
+        // by its type name, not its name, so position is the only reliable correlation -- same as the original).
         var schema = eventCatalogByName[ev.eventDef];
 
         h += '<div class="event-row" data-evidx="' + j + '">'
@@ -2188,7 +2188,10 @@
   function showPlaceholder(html) {
     acClose();   // the editor pane is going away -- never leave a stale completion popup/state behind
     document.getElementById('editor').style.display = 'none';
-    var el = document.getElementById('selInfo'); el.style.display = 'flex'; el.innerHTML = html;
+    // #selInfo is a flex CENTERING container, so multiple top-level nodes (text + <br> + <span>) become
+    // separate ROW flex items sitting side-by-side; wrap the content in one block so multi-line
+    // placeholders stack as normal lines.
+    var el = document.getElementById('selInfo'); el.style.display = 'flex'; el.innerHTML = '<div>' + html + '</div>';
     loaded = null; loadedEid = -1; updateDirty();
   }
   function hideEditor() { showPlaceholder('Select an entity from the list.'); }
@@ -2222,7 +2225,7 @@
       if (eid !== loadedEid) post({cmd:'select', eid: primaryEid});
     }
     else if (n === 0) { primaryEid = -1; showPlaceholder('Select an entity from the list.'); }
-    else { primaryEid = -1; showPlaceholder(n + ' entities selected.<br>Select a single entity to edit its decl.<br><span style="color:#aaa;">Right-click for actions on all ' + n + '.</span>'); }
+    else { primaryEid = -1; showPlaceholder(n + ' entities selected.<br>Select a single entity to edit its decl.<br><span style="opacity:0.75;">Right-click for actions on all ' + n + '.</span>'); }
     if (push !== false) pushSelectionToEditor();
   }
   function entityIdString(eid) {
@@ -2457,8 +2460,7 @@
     } else if (d.kind === 'deletePrefabResult') {
       if (d.result === 1) {
         toast('Deleted "' + d.name + '"', 'ok');
-        document.getElementById('prefabCard').style.display = 'none';
-        var empty = document.getElementById('pcEmpty'); empty.style.display = 'block'; empty.textContent = 'Select a prefab to see its details.';
+        clearPrefabSelection();
       } else if (d.result === 0) toast('Could not delete "' + d.name + '" (missing or in use)', 'err');
       else toast('Could not delete "' + d.name + '" (see log)', 'err');
     } else if (d.kind === 'renamePrefabResult') {
@@ -2525,6 +2527,7 @@
     document.getElementById('pfBadge').textContent = pfTotal;
     if (!root.length && !folders.length) {
       tree.innerHTML = '<div class="muted" style="padding:8px;">No prefabs yet -- select entities in the editor and use "Create from selection".</div>';
+      if (selectedPrefabName) clearPrefabSelection();
       return;
     }
     var filterEl = document.getElementById('prefabFilter');
@@ -2546,14 +2549,27 @@
     }
     for (var i = 0; i < rootShown.length; i++) h += '<div class="pf-item" draggable="true" data-folder="">' + esc(rootShown[i]) + '</div>';
     tree.innerHTML = anyShown ? h : '<div class="list-empty">No matches.</div>';
+    // The innerHTML replace above just destroyed any .selected row. If the selected prefab still exists
+    // on disk, re-mark its row (it may legitimately be hidden by the filter -- the selection stays valid);
+    // if it no longer exists (deleted/renamed/moved), drop the whole selection state so the detail card
+    // and the Delete / Load buttons can't act on a ghost.
+    if (selectedPrefabName) {
+      if (allPrefabNamesInFolder(selectedPrefabFolder).indexOf(selectedPrefabName) === -1) clearPrefabSelection();
+      else {
+        var rows = tree.querySelectorAll('.pf-item');
+        for (var ri = 0; ri < rows.length; ri++)
+          if (rows[ri].textContent === selectedPrefabName && (rows[ri].getAttribute('data-folder') || '') === selectedPrefabFolder) { rows[ri].classList.add('selected'); break; }
+      }
+    }
   }
 
   // prefab detail pane: real entity count + per-class tally read from the file itself. Description/tags
   // aren't stored anywhere yet (the prefab JSON has no metadata field) -- disabled until a sidecar file lands.
   function renderPrefabDetail(d) {
     var card = document.getElementById('prefabCard'), empty = document.getElementById('pcEmpty');
-    if (!d.ok) { card.style.display = 'none'; empty.style.display = 'block'; empty.textContent = 'Could not read "' + d.name + '".'; return; }
+    if (!d.ok) { card.style.display = 'none'; empty.style.display = 'block'; empty.textContent = 'Could not read "' + d.name + '".'; setPrefabButtons(false); return; }
     empty.style.display = 'none'; card.style.display = 'flex';
+    setPrefabButtons(true);
     document.getElementById('pcName').value = d.name;
     var types = d.types || [];
     var chips = '';
@@ -3058,6 +3074,25 @@
   // provisional and gets replaced by the next real 'prefabs' refresh from disk.
   var prefabTree = document.getElementById('prefabTree');
   var draggingItem = null;
+  // Delete / Load-Place act on the selected prefab, so they're enabled only while one is actually
+  // selected (setPrefabButtons); clearPrefabSelection is the single teardown for every way a selection
+  // ends -- blank-space click, the selected file disappearing from disk, or a successful Delete.
+  function setPrefabButtons(on) {
+    ['prefabDeleteBtn', 'prefabLoadBtn'].forEach(function(id){
+      var b = document.getElementById(id); if (!b) return;
+      b.disabled = !on;
+      if (on) b.removeAttribute('title'); else b.setAttribute('title', 'Select a prefab first');
+    });
+  }
+  function clearPrefabSelection() {
+    selectedPrefabName = ''; selectedPrefabFolder = '';
+    if (prefabTree) prefabTree.querySelectorAll('.pf-item.selected').forEach(function(s){ s.classList.remove('selected'); });
+    var card = document.getElementById('prefabCard'), empty = document.getElementById('pcEmpty');
+    if (card) card.style.display = 'none';
+    if (empty) { empty.style.display = 'block'; empty.textContent = 'Select a prefab to see its details.'; }
+    var nm = document.getElementById('pcName'); if (nm) nm.value = '';
+    setPrefabButtons(false);
+  }
   if (prefabTree) {
     prefabTree.addEventListener('click', function(e){
       var del = e.target.closest('.pf-folder-del');
@@ -3069,8 +3104,11 @@
       if (item) {
         prefabTree.querySelectorAll('.pf-item.selected').forEach(function(s){ s.classList.remove('selected'); });
         item.classList.add('selected');
+        selectedPrefabName = item.textContent;
         selectedPrefabFolder = item.getAttribute('data-folder') || '';
         post({cmd:'selectPrefab', name: item.textContent, folder: selectedPrefabFolder});
+      } else {
+        clearPrefabSelection();   // blank space -> deselect; the detail card empties and the buttons grey out
       }
     });
     prefabTree.addEventListener('dragstart', function(e){
@@ -3190,6 +3228,7 @@
   // card actions. Delete is a real file op; Load/Place stages the prefab (mkcmd, kind=1) and prompts the
   // user to paste it manually with Ctrl+V -- see poc_apply_load_prefab in snaphak_ui_webview.cpp.
   var selectedPrefabFolder = '';
+  var selectedPrefabName = '';
   var prefabLoadBtn = document.getElementById('prefabLoadBtn');
   if (prefabLoadBtn) prefabLoadBtn.addEventListener('click', function(){
     var name = document.getElementById('pcName').value; if (!name) return;
@@ -3229,6 +3268,7 @@
     item.classList.add('selected');
     var nm = item.textContent;
     var folder = item.getAttribute('data-folder') || '';
+    selectedPrefabName = nm;
     selectedPrefabFolder = folder;
     post({cmd:'selectPrefab', name: nm, folder: folder});
     ctx.innerHTML = '';
