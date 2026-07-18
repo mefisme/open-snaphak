@@ -85,8 +85,9 @@ This compiles both DLLs into **`build/`**: the backend `XINPUT1_3.dll` and the f
 is gitignored. (`build.ps1` first builds the backend, then the frontend, so the two never drift out of ABI
 sync -- see [`architecture.md`](architecture.md).)
 
-Two top-level build scripts exist: `build-backend.ps1` (backend only) and `build.ps1` (backend + frontend,
-used above and by CI). The frontend itself is described in [`webview-ui.md`](webview-ui.md).
+`build.ps1` is the one top-level build script (used above and by CI). Pass `-BackendOnly` to skip the
+frontend when iterating on backend code alone; any extra args (e.g. `-Diag`) forward through to
+`src\backend\build.ps1`. The frontend itself is described in [`webview-ui.md`](webview-ui.md).
 
 ## 5. Package the overlay
 
@@ -220,7 +221,7 @@ release. **Do not open a public issue for a security problem.** Use GitHub's **p
 | `installer/` | `snaphak.exe` — the Go install / update / uninstall CLI |
 | `tests/` | the C unit tests + `run-tests.ps1` |
 | `docs/` | architecture · capabilities · fidelity · packaging · webview-ui · backend-changes · this guide |
-| `build-backend.ps1` / `build.ps1` | compile the DLLs → `build/` (backend only · backend + frontend) |
+| `build.ps1` | compile the DLLs → `build/` (backend + frontend; `-BackendOnly` for backend alone) |
 | `package.ps1` | assemble the deployable overlay → `dist/` (the two clone DLLs) |
 | `.github/workflows/` | `ci.yml` (the PR gate) · `release.yml` (tag-triggered release) |
 | `LICENSE` | MIT |

@@ -67,8 +67,10 @@ frontend reads them at the same offsets.
 - **Extension slots are append-only**: a new capability gets the next slot after the current end;
   original-block offsets never move. This is also a real failure mode, not a formality — a frontend
   calling an extension slot that an older backend never installed would call through garbage. That is
-  why `build.ps1` always builds both DLLs from the same header in one pass, and why the frontend
-  null-probes an extension slot (falling back or skipping the feature) rather than assuming it.
+  why `build.ps1` builds both DLLs from the same header in one pass by default (its `-BackendOnly`
+  switch skips only the frontend — the safe direction, since an older frontend never reads past a
+  newer backend's vtable), and why the frontend null-probes an extension slot (falling back or
+  skipping the feature) rather than assuming it.
 - The frontend calls vtable slots for everything it needs from the engine: entity
   count/validity, classname/inherit/displayname read and write, serialize/deserialize an
   entity, apply an edit (`+0xd0`), enqueue and drain the work-queue (`+0x90` / `+0x1a0`),

@@ -18,7 +18,7 @@ research; the third-party runtime it links against (the DOOM engine, Microsoft's
 | `src/ui/` | the frontend DLL (`snaphakui.dll`): the WebView2 **"SnapHak Studio"** window (`webview/` = the host + `mockup.html`) |
 | `src/common/` | the shared backend↔frontend interface ABI (`snaphak_iface.h`) |
 | `src/fault_shield/` | the recover-in-place vectored-exception fault shield (compiled into the backend) |
-| `build-backend.ps1` / `build.ps1` | compile the DLLs → `build/` (backend only · backend + frontend) |
+| `build.ps1` | compile the DLLs → `build/` (backend + frontend; `-BackendOnly` skips the frontend) |
 | `package.ps1` | assemble the deployable overlay → `dist/` (the two clone DLLs) |
 | `installer/` | `snaphak.exe` — the end-user install / update / uninstall CLI (Go) |
 | `docs/` | architecture · capabilities · fidelity · packaging · webview-ui · backend-changes |
