@@ -11,9 +11,9 @@ gitignored (binaries are never committed).
 | `XINPUT1_3.dll` | `build/` | the backend: XInput proxy + hook layer + cvar-unlock + fault-shield + the SnapStack subsystem (all merged in) |
 | `snaphak\snaphakui.dll` | `build/webview/` | the frontend: the "SnapHak Studio" UI, rendered in a Microsoft Edge **WebView2** control (HTML/CSS/JS), with the HTML embedded in the DLL |
 
-Plus `MANIFEST.sha256` (the installer's file list + per-file hash verify). **No Qt runtime, no platform plugin**
-— the frontend renders in the **system-installed WebView2 runtime** (preinstalled on Windows 11; the evergreen
-runtime on most Windows 10), so there is nothing else to bundle. The two DLLs' exact sizes shift per build
+Plus `MANIFEST.sha256` (the installer's file list + per-file hash verify). **Nothing else ships** — the
+frontend renders in the **system-installed WebView2 runtime** (preinstalled on Windows 11; the evergreen
+runtime on most Windows 10), so there is no UI-toolkit runtime to bundle. The two DLLs' exact sizes shift per build
 (MSVC embeds a build timestamp), so equivalence is judged on the export/ordinal surface, not byte size.
 
 ## Layout
@@ -38,14 +38,12 @@ registry key and, if it's absent, offers to download + run Microsoft's evergreen
 auto under `--yes`). This never blocks the mod install — the DLLs deploy regardless; on the common case
 (Win11 / updated Win10) the check is a no-op since the runtime is already present.
 
-## What's deliberately dropped
+## What's deliberately NOT shipped
 
-- **The entire Qt runtime** (`Qt5Core`/`Qt5Gui`/`Qt5Widgets` + the `qwindows` platform plugin, ~18 MB) — the
-  previous Qt frontend needed it; the WebView2 frontend does not.
-- **`dinput8.dll`** — the cvar-unlock it used to carry is merged into the backend `XINPUT1_3.dll`; DOOM loads
-  the real `System32\dinput8.dll`.
-- **`winmm.dll`** — the fault-shield it used to carry is merged into the backend; DOOM loads the real
-  `System32\winmm.dll`. (Never re-ship a `winmm.dll`: a stub shadowing System32's copy kills the launch
+- **`dinput8.dll`** — the cvar-unlock is merged into the backend `XINPUT1_3.dll` instead of riding a second
+  proxy DLL; DOOM loads the real `System32\dinput8.dll`.
+- **`winmm.dll`** — the fault-shield is merged into the backend too; DOOM loads the real
+  `System32\winmm.dll`. (Never ship a `winmm.dll`: a stub shadowing System32's copy kills the launch
   before any logging.)
 
 ## Overrides are NOT shipped
@@ -65,4 +63,4 @@ DOOMx64vk.exe  SHA256  139763E94F1A75B5310179F9EEEB8A949A1F53C49ACBC722FCFC5DFE7
 A DOOM update changes this hash, which means a re-port (signature re-resolve + build-specific offset re-derive).
 The clone is built to survive that: engine functions are signature-resolved (fail-loud), data globals are
 RIP-decoded, and build-specific offsets carry re-derive recipes. The auto-re-patcher that automates this on each
-DOOM update is future work (see `.github/workflows/release.yml`).
+DOOM update is future work.

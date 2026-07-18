@@ -2,19 +2,19 @@
 
 `snaphakui.dll` renders the "SnapHak Studio" UI as HTML/CSS/JS in a Microsoft Edge **WebView2** control.
 It is **the** frontend: the `snaphak_ui_init` entry (export ordinal 10), the backend interface contract
-(`src/common/snaphak_iface.h`), and a manual 30 Hz think-loop draining the work-queue (`+0x1a0`). The
-backend (`XINPUT1_3.dll`) drives it exactly as it drove the earlier Qt frontend.
+(`src/common/snaphak_iface.h`), and a manual 30 Hz think-loop draining the work-queue (`+0x1a0`), driven
+by the backend (`XINPUT1_3.dll`) over that interface.
 
-**Status: the sole, shipped frontend.** It is built by the default `build.ps1`, packaged by `package.ps1`,
-and covered by CI. (It replaced an earlier Qt frontend, retired 2026-07-14; the ~18 MB Qt runtime is no
-longer bundled — the UI renders in the system-installed WebView2 runtime.)
+**Status: the shipped frontend.** It is built by the default `build.ps1`, packaged by `package.ps1`,
+and covered by CI. The UI renders in the system-installed WebView2 runtime, so no UI-toolkit runtime
+ships in the overlay.
 
-## Why HTML/WebView2 (vs the retired Qt frontend)
+## Why HTML/WebView2
 
-- No ~18 MB Qt runtime to bundle (`Qt5Core` / `Qt5Gui` / `Qt5Widgets` + the `qwindows` platform plugin) —
-  and no Qt SDK for contributors to install.
-- Iterate on the UI in HTML/CSS/JS instead of a hand-written Qt `setupUi`.
-- Combine the Entities + Entity-State tabs into a single view.
+- Nothing to bundle: the UI renders in the system WebView2 runtime, keeping the overlay at two DLLs —
+  and there is no UI SDK for contributors to install.
+- Iterate on the UI in plain HTML/CSS/JS, with a browser preview mode for fast layout work.
+- The entity list and the entity-state editor share a single view.
 
 Trade-off: it depends on the Microsoft Edge **WebView2 runtime** (preinstalled on Windows 11 and most
 Windows 10) instead of a bundled toolkit. The DLL statically links the WebView2 loader, so no extra loader
@@ -33,13 +33,13 @@ DLL ships.
 ```powershell
 # from the repo root -- builds the backend (build/XINPUT1_3.dll) + the frontend (build/webview/snaphakui.dll)
 powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1
-# assemble the lean overlay (2 files: XINPUT1_3.dll + snaphak/snaphakui.dll -- no Qt runtime)
+# assemble the lean overlay (2 files: XINPUT1_3.dll + snaphak/snaphakui.dll)
 powershell -NoProfile -ExecutionPolicy Bypass -File package.ps1           # -> dist/
 installer\snaphak.exe install --local dist --yes                          # deploy (DOOM must be closed)
 ```
 
 `package.ps1` assembles a lean overlay that ships **only** the two clone DLLs (the WebView2 runtime is
-system-installed; no Qt DLLs). Runtime log: `<DOOM>\snaphak_logs\webview_poc.log`.
+system-installed). Runtime log: `<DOOM>\snaphak_logs\webview_poc.log`.
 
 ## How it maps to the backend interface
 
@@ -63,21 +63,20 @@ The frontend holds no engine addresses; it calls the backend only through the vt
 | Live "Create from selection (N)" button count | `get_selection` +0x150, polled every ~330 ms independent of the sync checkboxes |
 | Prefabs list, detail pane, delete/rename, folders (create/rename/delete/move) | `resolve_prefab_path` +0xc0 only -- pure Win32 file/directory ops (`FindFirstFileA`, `DeleteFileA`, `MoveFileA`, `CreateDirectoryA`, `RemoveDirectoryA`) on the resolved path. No other engine slot involved, unaffected by the +0xb0 issues below. |
 | Create from selection | `serialize_selection` +0xb0 |
-| Load / Place | `apply_edit` kind=1 (mkcmd, the same path the Qt `mkcmd` command uses) -- stages into the paste slot only; the user presses Ctrl+V themselves. See the Changelog for why this is stage-only rather than fully automated. |
+| Load / Place | `apply_edit` kind=1 (the same staging path `sh mkcmd` uses) -- stages into the paste slot only; the user presses Ctrl+V themselves. See the Changelog for why this is stage-only rather than fully automated. |
 | Timelines list (dual-add `idTarget_Timeline` / `idEncounterManager`) | `get_classname_copy` +0x48 -- change-gated (see Changelog), not a fixed timer |
 | Open a timeline (tabs + events) | `serialize_entity` +0xc8 -- the same slot Save-to-Decl and Push-to-stack already use, JSON-parsed client-side |
 | Timeline event-arg dropdowns (decl / enum / per-entity asset lists) | `enum_decls_of_resclass` +0x110 -- the same shared slot for both decl-name and enum-member enumeration |
-| Save Timeline (commit `componentTimeLine` / `encounterComponent`) | `apply_edit` kind=0 -- the same path Save-to-Decl already uses, id-targeted instead of paste-targeted; see the Changelog and [`fidelity.md`](fidelity.md) for a real limitation on when this accepts data |
+| Save Timeline (commit `componentTimeLine` / `encounterComponent`) | `apply_edit` kind=0 -- the same path Save-to-Decl already uses, id-targeted instead of paste-targeted |
 
 Heavy engine writes (Save, Delete, Select-in-editor) are snapshotted in the JS message callback and
-applied on the next think-loop frame under the loop mutex -- mirroring the Qt frontend's flag-word
-dispatch, which keeps them off the re-entrant callback. That think-loop frame runs on the **frontend's
-own UI/think-loop thread**, not DOOM's main thread -- the same thread where the inline class/inherit
-apply-guard (`sh_iface_class_inherit_ok`) fails open, exactly as it does for the Qt frontend. The path
+applied on the next think-loop frame under the loop mutex, keeping them off the re-entrant callback.
+That think-loop frame runs on the **frontend's own UI/think-loop thread**, not DOOM's main thread -- the
+same thread where the inline class/inherit apply-guard (`sh_iface_class_inherit_ok`) fails open. The path
 that actually runs on DOOM's main thread, guarded by `ExecuteCommandBuffer`, is the *scheduled* `+0xd0`
 apply (`clone_bss_apply`) -- a different, deferred path, kept only as an old-backend fallback and for
-prefab/mkcmd staging (see [`backend-changes.md`](backend-changes.md) and [`qt-changes.md`](qt-changes.md)
-for why decl-edits must NOT go through it).
+prefab/mkcmd staging (see [`backend-changes.md`](backend-changes.md) for why decl-edits must NOT go
+through it).
 
 ## Changelog
 
@@ -137,10 +136,10 @@ A polish pass over the Timelines and Entities tabs, built on top of the SnapStac
   dropdowns already use for display-name-vs-stored-value). No new native round-trip -- it reuses the
   existing `.ev-arg-combo`/`tlRenderArgCombo` machinery decl/enum/asset args already share.
 - **Timeline EXPLAIN box.** Each event row gets a collapsed-by-default "What does this event do?" toggle
-  showing `sh_event_docs.h`'s author-facing summary + a per-arg description line, ported from Qt's
-  `tl_set_event_description`/`tl_arg_role` (`sh_timeline.cpp`). Shipped as a new `enumEventDocs` command
+  showing `sh_event_docs.h`'s author-facing summary + a per-arg description line. Shipped as a new
+  `enumEventDocs` command
   (`poc_send_event_docs`, same "static generated table, once per session" pattern as the event catalog),
-  cached client-side as `eventDocsByName`. Three UX options were mocked up and compared -- Qt's
+  cached client-side as `eventDocsByName`. Three UX options were mocked up and compared -- an
   always-visible block, this collapsed toggle (reusing the Entities tab's existing `.desc-panel` pattern
   verbatim, same open/close/text-selection-guard behavior), and an arg-focus variant (a slim one-line
   summary plus a hint that follows the currently-focused arg input). The collapsed toggle shipped as the
@@ -174,41 +173,39 @@ round trip.
 
 ### 2026-07-13 -- SnapStack ported to the backend: WebView gets the full `sh` command set
 
-WebView previously had **no** SnapStack ops — the whole subsystem was compiled into the Qt frontend. Ported
-the stores + all 20 `sh` handlers into the shared backend (`src/backend/snapstack.c` + `json_patch.c`), so
-`sh psel`/`sh acctargets`/`sh bss`/… now work under the WebView build. "Push to stack 0" (previously a stub)
-is wired to the backend stores via a new `+0x2A0` `push_to_stack` vtable slot. Registration is additive so a
-Qt build is unaffected (its own registrar still wins for the 20 names).
+The SnapStack stores + all 20 `sh` handlers moved into the shared backend (`src/backend/snapstack.c` +
+`json_patch.c`), so `sh psel`/`sh acctargets`/`sh bss`/… now work from the Studio window's build. "Push to
+stack 0" (previously a stub) is wired to the backend stores via a new `+0x2A0` `push_to_stack` vtable slot.
 
-The port surfaced a real backend bug that had broken *every* decl-edit op under WebView: `json_patch`
+The port surfaced a real backend bug that had broken *every* decl-edit op driven from the UI: `json_patch`
 produced invalid JSON when an entity's `state.edit` serialized as `null`/`{}` (an entity with no explicit
-overrides — everything shown on it is inherited), which the engine's lexer rejected (`applied 0/1`). Qt
-never hit it because QJson normalizes a null `edit` into `{}`. Fixed in `json_patch.c`; see
+overrides — everything shown on it is inherited), which the engine's lexer rejected (`applied 0/1`).
+Fixed in `json_patch.c`; see
 [`backend-changes.md`](backend-changes.md) for the full root-cause. Also added backend-exclusive
 `chkstk`/`chkgrp`/`clrgrp` store-management commands and confirm toasts on the previously-silent ops.
 
-Verified in-game: 19 of the 20 ops (all but `mkcmd`, ported-but-unverified) plus the new commands, with Qt
-confirmed unaffected. Command reference: [`capabilities.md`](capabilities.md#snapstack-ops).
+Verified in-game: 19 of the 20 ops (all but `mkcmd`, ported-but-unverified) plus the new commands.
+Command reference: [`capabilities.md`](capabilities.md#snapstack-ops).
 
-### 2026-07-13 -- Timeline parity with Qt: palette-inherit normalize, inline Save Timeline, and the fresh-save `typeof null` bug
+### 2026-07-13 -- Timelines: palette-inherit normalize, inline Save Timeline, and the fresh-save `typeof null` bug
 
-A focused session bringing WebView's Timeline handling to full parity with Qt. Three real fixes, found by
-methodical in-game testing (Qt as the validated reference) plus, for the last one, a step-by-step
+A focused session on Timeline handling. Three real fixes, found by
+methodical in-game testing plus, for the last one, a step-by-step
 JS→native chain trace. All verified in-game on both **palette-placed and reclassed** Timelines, including
 play/save/reload persistence.
 
-- **Palette-Timeline portable-inherit normalize now works in WebView** (it didn't before). A Timeline
+- **Palette-Timeline portable-inherit normalize now works** (it didn't before). A Timeline
   placed from the in-game palette carries the non-portable `snapmaps/editor_only/placeholder_target`
-  inherit; Qt rewrote it to `snapmaps/unknown`, WebView did nothing. The rewrite was **ported into a shared
-  backend slot (`+0x298`)** so both frontends run one implementation (see
-  [`backend-changes.md`](backend-changes.md)); WebView calls it from its Timeline rescan. Porting it
+  inherit; it is now rewritten to `snapmaps/unknown` via a **shared
+  backend slot (`+0x298`)** (see
+  [`backend-changes.md`](backend-changes.md)), called from the Timeline rescan. Porting it
   surfaced a latent **decl-source-blob-lag** bug (the Inherit box and the saved map kept showing the
   placeholder even after the raw field updated) — root-caused and fixed backend-side; see that doc.
-- **Save Timeline commits inline (`+0x290`), matching Qt** — no more crash on the next play/save/reload.
-  WebView's Save Timeline had been using the deferred `+0xd0` schedule, the exact deferred-apply
-  double-free Qt fixed in 2026-07-12; migrated to `poc_apply_sync_seh`.
-- **Fresh Timelines now save immediately, with no copy/paste or map save+reload first** — closing the last
-  gap vs Qt. This had been mis-documented (in [`fidelity.md`](fidelity.md), now retracted) as a pre-existing
+- **Save Timeline commits inline (`+0x290`)** — no more crash on the next play/save/reload.
+  Save Timeline had been using the deferred `+0xd0` schedule, the exact deferred-apply
+  double-free fixed backend-side on 2026-07-12; migrated to `poc_apply_sync_seh`.
+- **Fresh Timelines now save immediately, with no copy/paste or map save+reload first.**
+  This had been mis-documented as a pre-existing
   *engine* limitation. It was actually a **JavaScript `typeof null === 'object'` bug** in
   `tlBuildPatchedEntityJson`: a freshly-placed/reclassed Timeline serializes as `edit = NULL;`
   (`"state":{"edit":null}`), and the `typeof x !== 'object'` guard let the `null` through; the next line
@@ -220,17 +217,16 @@ play/save/reload persistence.
   correction (from the normalize above) can land on the untouched Inherit box even mid-edit of another
   field, instead of the whole-panel dirty guard freezing stale placeholder text.
 
-> **Architectural follow-up (tracked):** the SnapStack command logic (`snapstack.cpp`) is still **Qt-only**,
-> and each frontend independently picks inline vs deferred at every decl-edit call site — a footgun that
-> caused the WebView Save Timeline regression above (one reverted line silently dropped it back onto the
-> crash path). The durable fix is to **port SnapStack into the backend** as shared handlers with the extra
-> ops WebView lacks, so both frontends share one commit path. See "Known limitations / TODO" and
+> **Architectural follow-up (since done):** at the time, each decl-edit call site independently picked
+> inline vs deferred — a footgun that caused the Save Timeline regression above (one reverted line silently
+> dropped it back onto the crash path). The durable fix — SnapStack as shared backend handlers with one
+> commit path — landed the same day; see the SnapStack entry above and
 > [`backend-changes.md`](backend-changes.md).
 
 ### 2026-07-12 -- Contributor follow-ups: path-safety gate, pinned WebView2 SDK, malloc null-check
 
 A contributor reviewing the WebView frontend PR flagged three low-risk, non-blocking items (plus two
-more covered in [`backend-changes.md`](backend-changes.md) and [`qt-changes.md`](qt-changes.md)):
+more covered in [`backend-changes.md`](backend-changes.md)):
 
 - **Path-safety gate.** `resolve_prefab_path` (+0xc0, backend) is a plain string concat with no
   rejection of its own -- a prefab/folder name containing `..` or a path separator would resolve
@@ -238,9 +234,7 @@ more covered in [`backend-changes.md`](backend-changes.md) and [`qt-changes.md`]
   `RemoveDirectoryA`. Only the JS side guarded this before. Added a native `poc_valid_name()` check
   (rejects `..`, `/`, `\`, `:`, empty, and >200 chars) in `snaphak_ui_webview.cpp`, wired into the two
   choke-point helpers every prefab/folder file op already funnels through (`poc_prefab_dir`,
-  `poc_prefab_file_path`) plus the one direct caller (`poc_apply_create_prefab`). The Qt frontend had
-  the identical gap (`iface_resolve_prefab_path` in `sh_tabs.cpp`) and got the equivalent gate,
-  `sh_valid_prefab_name()`, the same day -- see `qt-changes.md`.
+  `poc_prefab_file_path`) plus the one direct caller (`poc_apply_create_prefab`).
 - **Pinned the WebView2 SDK version.** `build-webview.ps1` fetched NuGet's `index.json` and took
   `$idx.versions[-1]` -- literally whatever NuGet listed last, prerelease or not. This wasn't
   theoretical: the SDK actually cached on disk from an earlier run was `1.0.4071-prerelease`. Replaced
@@ -262,7 +256,7 @@ that doc for the write-up.
 
 > **CORRECTION (2026-07-13):** the crash root-cause and "freshly-placed needs save+reload / it's a
 > pre-existing engine limitation" conclusions in this entry were later **disproven** — see the 2026-07-13
-> Changelog entry above and the retraction in [`fidelity.md`](fidelity.md). The crash was our own
+> Changelog entry above. The crash was our own
 > deferred-apply double-free (fixed by the `+0x290` inline commit), and the "silently stops partway through
 > the save handler, no exception... never pinned down" postmortem below was a JavaScript `typeof null ===
 > 'object'` throw on a `null` `state.edit` (fixed 2026-07-13). Fresh Timelines now save with no workaround.
@@ -335,8 +329,8 @@ that doc for the write-up.
     placed/reclassed Timeline needs *something* to happen before Save Timeline will accept data --
     copy/paste was one way to get there (the wrong one); a plain native Save Map + Reload is another,
     and was confirmed, repeatedly, to fully unblock Save Timeline with no crash or corruption across
-    many subsequent edit/save/reload cycles. Full writeup and the exact repro in
-    [`fidelity.md`](fidelity.md#a-freshly-placedreclassed-timeline-needs-a-map-savereload-before-it-accepts-data).
+    many subsequent edit/save/reload cycles. (A conclusion later disproven — see the CORRECTION at the
+    top of this entry.)
   - One real, narrow bug **was** found and fixed along the way (`ae_apply_one` could commit an empty
     class/inherit if the engine's own deserialize choked) -- see
     [`backend-changes.md`](backend-changes.md#2026-07-08--apply_enginec-ae_apply_one-could-commit-an-empty-classinherit).
@@ -366,14 +360,14 @@ that doc for the write-up.
   The classname read is **change-gated**, not run on a fixed timer: the cheap per-poll entity scan
   (id-string + hidden flag only, unchanged from before this feature) computes a signature every
   ~330 ms as it always has, and the Timeline-specific classname rescan only runs when that signature
-  actually changes -- mirroring the two-tier discipline the Qt `sh_dispatch_flagword` already uses
+  actually changes -- a two-tier discipline
   (a cheap always-on check gating a rarer expensive one), not the naive "call it every poll forever"
   first attempt that broke the Entities list (see the postmortem below).
 - **Open**: click a timeline -> `serialize_entity` (+0xc8) -> the raw JSON is shipped to the page ->
   `JSON.parse` + a walk of `entityDef.state.edit.componentTimeLine` / `.encounterComponent` ->
   `entityEvents.item[N]` becomes one tab per driven entity, `events.item[N]` becomes that tab's event
-  rows. Mirrors `tl_collect_from_decl` (`sh_timeline.cpp`), but the parsing lives in JS against the
-  same valid-JSON bytes Qt parses with `QJsonDocument` -- no hand-rolled C JSON parser needed.
+  rows. The parsing lives in JS against the
+  engine's own valid-JSON bytes -- no hand-rolled C JSON parser needed.
 - **Tabs**: labeled `Item N` (0-indexed, matching the decl's own `item[0]`/`item[1]`/... keys exactly --
   confirmed via a live, read-only Ghidra decompile of the original `snaphakui.dll`'s real tab-title code,
   which is the literal string `"item[%1]"`; ours drops the brackets for readability but keeps the
@@ -425,7 +419,7 @@ that doc for the write-up.
   checks the hovered-id slot (+0x198) up front before attempting create, so it can show an accurate
   "hover over an entity first" result instead of the old misleading "nothing selected" toast or a crash
   -- the Create modal also has an inline tip to that effect.
-- **Load / Place wired, stage-only.** `apply_edit` kind=1 (the same mkcmd path as the Qt frontend) stages
+- **Load / Place wired, stage-only.** `apply_edit` kind=1 (the same staging path `sh mkcmd` uses) stages
   the prefab into the paste slot, plus an auto-`clear_selection` first; the user presses Ctrl+V
   themselves to place it. Two attempts at automating that last step (a direct `PasteInstantiate` call,
   then a synthesized native Ctrl+V) each surfaced a different real side effect in DOOM -- a crash on the
@@ -456,7 +450,7 @@ that doc for the write-up.
 - "Follow editor selection" (editor selection -> list, any N) and "Select in 3D editor" (list selection ->
   editor, hidden entities skipped). The two are mutually exclusive to avoid a selection feedback loop.
 - Camera Origin bar (always visible): X/Y/Z fields track the live editor camera; "Lock Position" pins it
-  (writes the stored vec3 every frame); a committed field edit writes back. Mirrors the Qt camera sync.
+  (writes the stored vec3 every frame); a committed field edit writes back.
 - Modern light/dark theme with a menu bar toggle (remembered via localStorage); a menu bar with a Settings
   placeholder for future feature toggles. Native controls (scrollbars, checkboxes) follow the theme.
 - Installed-version + connection status in the status bar.
@@ -486,7 +480,7 @@ that doc for the write-up.
     tab's filter); folders with zero matches are hidden while filtering, with a "No matches." empty state.
   - "Create from selection" works end-to-end. "Load / Place" reads the prefab file's raw JSON, clears the
     current editor selection, and stages it into `editor+0x209a8` (a plain `kind=1`/mkcmd apply item,
-    identical to the pre-existing Qt `mkcmd` path) -- then prompts the user to press Ctrl+V themselves in
+    the same staging `sh mkcmd` performs) -- then prompts the user to press Ctrl+V themselves in
     the 3D view to actually place it. This is deliberately stage-only, matching the *original* SnapHak's
     own workflow exactly (confirmed by decompiling `snaphakui.dll`/`XINPUT1_3.dll` -- a prefab
     double-click there only ever stages, never auto-places either). Two earlier attempts at automating
@@ -495,7 +489,7 @@ that doc for the write-up.
     full story. Available from both the "Load / Place" button and the prefab list's right-click menu. The
     generic engine "SnapStack: ..." toast is suppressed for this op specifically (`ae_toast_result` skips
     it for `op == "load-prefab"`) since the webview's own toast already tells the user what to do next;
-    the Qt `mkcmd` command still gets the engine toast, since it has no toast of its own.
+    the `sh mkcmd` console command still gets the engine toast, since it has no toast of its own.
   - Live "Create from selection (N)" button count and the create modal's "From N selected entities" text
     both track the real editor selection continuously (two separate display bugs fixed: the count used to
     silently cap at 64 regardless of the real selection size, and the modal text never updated at all --
@@ -516,31 +510,24 @@ Genuinely open items only -- fixed bugs and completed work live in the Changelog
   [`fidelity.md`](fidelity.md).
 - **"Use current selection" (2026-07-14, RESOLVED).** The Timeline "Runs on" picker's button now reads the
   live 3D-editor selection via a fresh on-demand native round-trip. See the 2026-07-14 Changelog entry.
-- **"Create New Timeline" stays disabled.** `sh_timeline.h` (the Qt port) documents that a clone-side
-  create path is impossible (both a from-scratch spawn and a reclass-morph corrupted the map in that RE
-  work) -- but a live decompile of the OG's `retranslateUi` this session found a real
+- **"Create New Timeline" stays disabled.** Earlier reverse-engineering concluded a clone-side
+  create path is impossible (both a from-scratch spawn and a reclass-morph corrupted the map in that
+  work) -- but a live decompile of the original's `retranslateUi` this session found a real
   `"Create New Timeline"` button and string in the *original* binary, which contradicts that assumption.
   Not re-investigated yet; flagging it here so the disabled state doesn't get treated as settled.
-- **SnapStack ported to the backend (2026-07-13, RESOLVED).** The SnapStack subsystem (stores + all 20 `sh`
-  handlers) was Qt-bound (`snapstack.cpp`), so WebView had none of the ops. It now lives in the shared
-  backend (`src/backend/snapstack.c` + `json_patch.c`), registered additively before any frontend loads, so
-  WebView gets the full command set (`psel`/`acctargets`/`bss`/…) and Qt is unaffected (its own registrar
-  still wins for the 20 names). "Push to stack 0" is wired to the real backend stores via a new `+0x2A0`
-  `push_to_stack` slot. This also closes the inline-vs-deferred footgun for WebView: the shared handlers
-  commit every `kind=0` decl-edit through the synchronous `+0x290` `apply_sync` path. New backend-exclusive
-  `chkstk`/`chkgrp`/`clrgrp`/`snapstack_diag` commands were added for store inspection/management (WebView-
-  scoped — see the note below). Full design + the `json_patch` empty-`edit` fix are in
-  [`backend-changes.md`](backend-changes.md) (2026-07-13 entry). **Phase 2 DONE (2026-07-14):** Qt's own
-  `snapstack.cpp` copy was retired — Qt now runs the shared backend handlers/stores too (one implementation,
-  one store; `chkstk`/`chkgrp`/`clrgrp` + the push/clear slots are correct under Qt as well). Qt's "Push to
-  stack 0" reaches the shared store via the `+0x2A0` slot. **Still open:** `mkcmd` is ported but not
+- **SnapStack ported to the backend (2026-07-13/14, RESOLVED).** The SnapStack subsystem (stores + all 20
+  `sh` handlers) lives in the shared backend (`src/backend/snapstack.c` + `json_patch.c`) — one
+  implementation, one store. "Push to stack 0" reaches it via the `+0x2A0` `push_to_stack` slot, and the
+  shared handlers commit every `kind=0` decl-edit through the synchronous `+0x290` `apply_sync` path (which
+  closes the inline-vs-deferred footgun). Backend-exclusive `chkstk`/`chkgrp`/`clrgrp`/`snapstack_diag`
+  commands exist for store inspection/management. Full design + the `json_patch` empty-`edit` fix are in
+  [`backend-changes.md`](backend-changes.md) (2026-07-13 entry). **Still open:** `mkcmd` is ported but not
   live-verified.
 - Editing an entity's decl does not re-present it live in the editor (a decl commit updates the definition
-  but not the already-spawned instance -- same as Save-to-Decl in the Qt UI). A live in-editor re-present
+  but not the already-spawned instance -- same as Save-to-Decl). A live in-editor re-present
   via the engine's per-entity refresh is a possible future experiment.
 - Undo covers only unsaved edits (the Revert button + the textarea's native undo); undoing a committed Save
   is not implemented.
-- Not wired into CI (CI builds the Qt path via `build.ps1`).
 
 ## Preview mode
 

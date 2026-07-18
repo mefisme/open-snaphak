@@ -1,7 +1,7 @@
-/* snaphak_ui_webview.cpp -- PROOF-OF-CONCEPT frontend: a Qt-free snaphakui.dll that hosts the
- * "SnapHak Studio" UI as HTML in a Microsoft Edge WebView2 control instead of a Qt widget tree.
+/* snaphak_ui_webview.cpp -- the frontend: snaphakui.dll hosts the "SnapHak Studio" UI as HTML in a
+ * Microsoft Edge WebView2 control.
  *
- * Drop-in for the Qt snaphakui.dll: exports snaphak_ui_init (ord 10), writes the loop-state to
+ * Exports snaphak_ui_init (ord 10), writes the loop-state to
  * arg-block[0], caches the backend interface (arg-block[3]) and drains its work-queue (+0x1a0) at
  * ~30 Hz on this thread, keeps the 9 sl_* exports (../sl_exports.cpp). Zero DOOM/OG bytes.
  *
@@ -12,10 +12,10 @@
  *   - auto-refresh: a cheap content signature over the walk; the list is re-emitted only when it
  *     changes (add/delete/rename/reclass/hide), so no needless re-renders.
  *   - synchronize with editor: when the checkbox is on, poll get_selection (+0x150); a single changed
- *     editor selection re-points the panel (mirrors the Qt sync, sh_tabs.cpp ~820).
+ *     editor selection re-points the panel.
  *   - state auto-refresh: the displayed entity's state is re-read on a signature and pushed as
  *     {auto:true}; the HTML applies it only when the edit panel is clean (never clobbers unsaved edits).
- *   - save is deferred + applied under the loop mutex (Qt apply_entity_state order); delete likewise.
+ *   - save is deferred + applied under the loop mutex; delete likewise.
  */
 #include <windows.h>
 #include <shlobj.h>
@@ -117,8 +117,8 @@ static std::string   g_move_prefab_name, g_move_prefab_from, g_move_prefab_to;
 static int           g_move_prefab_result = 0;      /* 1 ok; 0 MoveFile failed (dest name collision); -1 resolve failed */
 
 /* Timelines Stage 2: OPEN a timeline -> serialize the entity (+0xc8) and ship its raw JSON to the page, which
- * JSON.parses it and walks entityDef.state.edit.componentTimeLine/encounterComponent (same shape the Qt
- * tl_collect_from_decl parses). Serialize is an engine touch -> done in the think-loop drain under the loop
+ * JSON.parses it and walks entityDef.state.edit.componentTimeLine/encounterComponent. Serialize is an
+ * engine touch -> done in the think-loop drain under the loop
  * mutex, like the prefab ops. */
 static volatile bool g_pending_open_timeline = false;
 static int           g_open_timeline_eid = -1;
@@ -366,12 +366,11 @@ static void poc_rescan_timelines(int n)
         if (c && (strcmp(c, "idTarget_Timeline") == 0 || strcmp(c, "idEncounterManager") == 0)) {
             /* PORTABLE-INHERIT NORMALIZE (2026-07-13): a Timeline placed from the in-game palette is
              * spawned from a repurposed placeholder entityDef, so it records that as its `inherit` -- a
-             * saved map would then only reload where our override is installed. This was Qt-only until
-             * now (sh_timeline.cpp sh_timeline_normalize_inherit); the logic is ported to the shared
-             * backend slot +0x298 so WebView gets it too. Cheap on a non-match (a raw defsub-inherit read,
+             * saved map would then only reload where our override is installed. The rewrite lives in the
+             * shared backend slot +0x298. Cheap on a non-match (a raw defsub-inherit read,
              * no serialize/no alloc) and idempotent, so it's safe to call unconditionally on every
              * Timeline-classed id every rescan -- only idTarget_Timeline can carry the placeholder
-             * (idEncounterManager's inherit is unrelated), matching Qt's own gating. The displayed Inherit
+             * (idEncounterManager's inherit is unrelated). The displayed Inherit
              * box (if this entity is open in the Entity-State panel) self-corrects via the regular auto
              * state poll -- see the per-field dirty exception in mockup.html's 'state' handler. */
             if (strcmp(c, "idTarget_Timeline") == 0 && g_iface->vtbl->normalize_timeline_inherit) {
@@ -502,8 +501,8 @@ static int poc_serialize_entity_into(int id, char *buf, int cap)
 static char g_tl_json[1024 * 1024];
 static int poc_serialize_entity_raw(int id) { return poc_serialize_entity_into(id, g_tl_json, (int)sizeof g_tl_json); }
 /* Post {kind:"timelineData", eid, ok, json:"<the serialized entity JSON, escaped>"}. The page JSON.parses
- * `json` and walks entityDef.state.edit.componentTimeLine / encounterComponent itself (the entity JSON is
- * valid JSON -- the Qt side parses the identical bytes with QJsonDocument). */
+ * `json` and walks entityDef.state.edit.componentTimeLine / encounterComponent itself (the engine's
+ * serialized entity is valid JSON). */
 static void poc_emit_timeline_data(int eid, int json_len)
 {
     if (!g_webview) return;
@@ -568,8 +567,8 @@ static int poc_serialize_selection_raw(char *buf, int cap)
     __except (EXCEPTION_EXECUTE_HANDLER) { n = 0; }
     return n;
 }
-/* Create-from-selection: resolve the file path (+0xc0), serialize the CURRENT editor selection (+0xb0,
- * same slot the Qt sh_prefab_create_clicked uses), fwrite it. g_create_result: 1 ok, 0 nothing was
+/* Create-from-selection: resolve the file path (+0xc0), serialize the CURRENT editor selection (+0xb0),
+ * fwrite it. g_create_result: 1 ok, 0 nothing was
  * selected (serialize returned empty), 2 not hovering an entity in the selection, -1 resolve/serialize/
  * write failure. Real prefabs on disk run up to ~370 KB (Sync Entities for Demons.json), so the scratch
  * buffer is generously sized at 4 MB.
@@ -699,9 +698,9 @@ static int poc_apply_edit_seh(const sh_apply_item *it, int count, const char *op
     __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
 }
 /* Decl-edit (kind=0) commits MUST go inline via +0x290, never the deferred +0xd0 schedule -- that's the
- * deferred-apply double-free the Qt frontend hit and fixed (docs/backend-changes.md, docs/qt-changes.md,
- * 2026-07-12). Mirrors sh_timeline.cpp's tl_iface_schedule_apply: try apply_sync first, fall back to the
- * deferred apply_edit only on an old backend that lacks +0x290. kind=1 (mkcmd staging, e.g. Load/Place) is
+ * deferred-apply double-free (docs/backend-changes.md, 2026-07-12): splitting the commit across two
+ * threads/frames double-owns the decl-source block. Try apply_sync first, fall back to the deferred
+ * apply_edit only on an old backend that lacks +0x290. kind=1 (mkcmd staging, e.g. Load/Place) is
  * unaffected by this bug and stays on poc_apply_edit_seh/apply_edit. */
 static int poc_apply_sync_seh(const sh_apply_item *it, int count, const char *op)
 {
@@ -738,12 +737,11 @@ static void poc_apply_load_prefab()
 }
 /* Timelines Stage 5 (Save): kind=0 (deserialize the FULL patched entity JSON -> temp def -> commit
  * class/inherit/source on `id`) -- id-targeted instead of paste-targeted. The page already did the hard
- * part (fresh-reserialize + JSON-patch the componentTimeLine/encounterComponent field, matching Qt's
- * tl_patch_component); this is purely "hand the opaque blob to the engine and report whether it took."
- * COMMITS VIA +0x290 SYNC (OG-faithful, matches Qt): this is a decl-edit commit, same class of op as
- * SnapStack's acctargets/bss/bse and Qt's Timeline Save -- the deferred +0xd0 schedule double-frees the
- * committed decl-source block on the next Play->teardown, exactly the crash Qt fixed. See poc_apply_sync_seh
- * and docs/qt-changes.md. */
+ * part (fresh-reserialize + JSON-patch the componentTimeLine/encounterComponent field); this is purely
+ * "hand the opaque blob to the engine and report whether it took."
+ * COMMITS VIA +0x290 SYNC (OG-faithful): this is a decl-edit commit, same class of op as SnapStack's
+ * acctargets/bss/bse -- the deferred +0xd0 schedule double-frees the committed decl-source block on the
+ * next Play->teardown. See poc_apply_sync_seh and docs/backend-changes.md. */
 static void poc_apply_save_timeline()
 {
     g_save_timeline_result = 0;
@@ -924,10 +922,10 @@ static int poc_run_arg_resclass(const char *resClass, char *buf, int cap, int *p
     return r;
 }
 /* Timelines Stage 3 (DECL + ENUM arg widgets): the valid-values list for ONE decl resource-class or ONE
- * engine enum type, via the SAME shared +0x110 slot the Qt clone's tl_iface_enum_decls uses for both --
+ * engine enum type, via the same shared +0x110 slot for both --
  * decl args pass the reduced short-name ("sound"), enum args pass the raw catalog type verbatim
  * ("fxCondition_t"). A shifted-build offset or unknown resClass degrades to an empty list (the combo then
- * falls back to a plain editable box, faithful to the OG/Qt behavior). */
+ * falls back to a plain editable box, faithful to the original's behavior). */
 static void poc_send_arg_resclass(const char *resClass)
 {
     if (!g_webview) return;
@@ -951,9 +949,9 @@ static void poc_send_arg_resclass(const char *resClass)
     json += L"]}";
     g_webview->PostWebMessageAsJson(json.c_str());
 }
-/* CLONE EXTENSION: the Entities-tab Inherit/Classname description panel -- same source table + name->desc
- * lookup as the Qt clone's es_lookup_desc (sh_tabs.cpp), reused here so both frontends read one canonical
- * generated table (sh_entity_desc.h) instead of duplicating the text. */
+/* CLONE EXTENSION: the Entities-tab Inherit/Classname description panel -- a name->desc
+ * lookup over the canonical
+ * generated table (sh_entity_desc.h). */
 static const ShEntDesc *poc_lookup_desc(const std::string &name)
 {
     static std::map<std::string, const ShEntDesc *> *idx = nullptr;
@@ -984,9 +982,9 @@ static void poc_send_desc(const char *inherit, const char *classname)
 }
 /* Timelines Stage 3: the full event-def catalog, sent ONCE per session (like enumInherits' full list) --
  * the page caches it and filters client-side, same "first N shown, type to narrow" Combo() convention as
- * Inherit/Classname. Each event carries its arg SCHEMA (name+type per position, matching sh_timeline.cpp's
- * ShEvtArg) -- not just the bare event name -- so the page can label each argument ("<name> (<type>)",
- * same convention as the Qt clone's tl_arg_label) and know how many args a freshly-picked event expects,
+ * Inherit/Classname. Each event carries its arg SCHEMA (name+type per position)
+ * -- not just the bare event name -- so the page can label each argument ("<name> (<type>)",
+ * the same convention the original uses) and know how many args a freshly-picked event expects,
  * instead of only being able to describe args that already have a stored value. Static data
  * (sh_event_catalog.h), no engine touch. */
 static void poc_send_events()
@@ -1010,7 +1008,7 @@ static void poc_send_events()
     g_webview->PostWebMessageAsJson(json.c_str());
 }
 /* Timelines "EXPLAIN" box (Option B, see docs/webview-ui.md) -- our author-facing summary + per-arg
- * descriptions for each event, ported from the Qt clone's tl_set_event_description/sh_event_docs.h. Same
+ * descriptions for each event, backed by the generated sh_event_docs.h table. Same
  * "ship the whole generated table once per session, cache client-side" pattern as poc_send_events -- static
  * data (sh_event_docs.h), no engine touch. Sent lazily (enumEventDocs), not folded into poc_send_events,
  * since it's a materially bigger payload the description panel doesn't need until the user actually opens
@@ -1049,7 +1047,7 @@ static void poc_json_asset_items(std::wstring &json, const ShAssetItem *items, i
     }
     json += L"]";
 }
-/* Timelines Stage 3 (per-entity asset dropdowns, "exceed-the-OG" -- the original Qt UI never had this,
+/* Timelines Stage 3 (per-entity asset dropdowns, "exceed-the-OG" -- the original never had this,
  * it just made you type a raw model index or anim path): the full per-entity-class asset table, sent ONCE
  * per session, same "ship the canonical generated table, cache client-side" pattern as poc_send_events.
  * Only 45 entity classes carry asset lists (sh_entity_asset_lists.h), far smaller than the event catalog.
@@ -1141,8 +1139,8 @@ static void poc_send_prefab_detail(const std::string &name, const std::string &f
     g_webview->PostWebMessageAsJson(json.c_str());
 }
 
-/* enumerate %USERPROFILE%\snaphak\prefabs\ (resolved via the +0xc0 interface slot, same path the OG/Qt
- * Prefabs tab lists -- see sh_tabs.cpp sh_prefab_list_populate): the root *.json files, plus one real level
+/* enumerate %USERPROFILE%\snaphak\prefabs\ (resolved via the +0xc0 interface slot, the same path the
+ * original's Prefabs tab lists): the root *.json files, plus one real level
  * of subdirectories (each a "folder"), each listing its own *.json files. No nested-within-nested. Empty
  * (or missing dir) sends empty arrays so the UI can show its empty state. */
 static void poc_send_prefabs()

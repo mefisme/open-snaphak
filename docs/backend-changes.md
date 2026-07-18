@@ -1,78 +1,50 @@
 # Backend changes — engine-call bugfix log
 
 A running log of correctness bugs found and fixed in `src/backend/` — the shared engine-call layer
-used by **both** the Qt frontend and the [experimental webview UI](webview-ui.md). These are cases
+behind the frontend. These are cases
 where our own reimplementation was wrong, not the original SnapHak's behavior; a divergence from
 (or faithful reproduction of) the *original's* behavior belongs in [`fidelity.md`](fidelity.md)
 instead. Entries are chronological, newest first.
 
-## 2026-07-14 — SnapStack is now backend-only: retired the Qt-side `snapstack.cpp` copy (Phase 2)
+## 2026-07-13/14 — SnapStack lives in the backend (`snapstack.c` + `json_patch.c`); the `json_patch` empty-`edit` fix; store slots + management commands
 
-The SnapStack subsystem now lives **entirely in the backend** (`src/backend/snapstack.c` + `json_patch.c`).
-The Qt frontend's own copy (`src/ui/snapstack.cpp` + `snapstack.h`, ~1.3k lines) is **removed**, along with its
-startup registrar call in `snaphak_ui_init.cpp` — so there is now ONE implementation and ONE store, shared by
-both the Qt and WebView frontends, instead of two copies with the backend's overwritten under Qt.
-
-- **Registration:** the backend registers all 20 `sh` subcommands in `ui_bridge.c` before any frontend loads;
-  with the Qt registrar gone, that registration is authoritative on **both** builds (no frontend overwrites it).
-  `sh snapstack_diag` now reports the backend as the owner of every command on the Qt build too.
-- **The Qt Entities-tab "Push to stack 0"** context action (`sh_tabs.cpp`) reaches the shared backend store via
-  the `+0x2A0` `push_to_stack` slot (the same slot the WebView host uses), replacing the removed in-process
-  `sh_snapstack_push_ids`/`push_one` helpers. Multi-select pushes the whole selection, single pushes the clicked
-  row (dedup on push) — behavior unchanged.
-- **Builds:** `snapstack.cpp` dropped from the Qt source list (`src/ui/build.ps1`); the backend already compiles
-  `snapstack.c`. Both frontends (as they then existed) build clean.
-
-**This resolves the store-duplication limitation** from the 2026-07-13 port entry below: the `chkstk`/`chkgrp`/
-`clrgrp` inspection commands and the push/clear slots now operate on the same store the ops use, on both
-frontends. This is a deliberate structural choice — SnapStack is hosted in the shared backend so both frontends
-run one copy — with behavior identical to before.
-
-## 2026-07-14 — `+0x2A8` `clear_stack` slot (WebView "Clear stack 0")
-
-A new vtable ext slot (ext 8), the out-of-process counterpart to the `+0x2A0` `push_to_stack` slot above:
-lets the WebView host empty the backend-owned SnapStack stack `index` from a context-menu click instead of
-needing the DOOM console (`sh cstk 0`). `sh_snapstack_clear_stack_backend()` mirrors `h_cstk`'s own logic
-(`snapstack.c`) and returns the pre-clear count so the caller can toast a confirmation. Same reasoning as
-`push_to_stack` for why Qt doesn't need this slot: its own Entities-tab context menu reaches
-`snapstack.cpp`'s in-process stores directly.
-
-## 2026-07-13 — SnapStack ported into the shared backend (`snapstack.c` + `json_patch.c`); `json_patch` empty-`edit` fix; new store-management commands
-
-**What & why.** The entire SnapStack subsystem — the stack-of-stacks + named-group stores and all 20 `sh`
+**What & why.** The SnapStack subsystem — the stack-of-stacks + named-group stores and all 20 `sh`
 subcommand handlers (`psel`/`popsel`/`phov`/`pr`/`pg`/`pop2g`/`cstk`/`filtinh`/`filtcls`/`bss`/`bsi`/`bsf`/
-`bsb`/`bse`/`bsin`/`bscls`/`bsincls`/`accl`/`acctargets`/`mkcmd`) — lived only in the Qt frontend
-(`src/ui/snapstack.cpp`), registered at Qt startup. The Qt-free WebView host never called that registrar, so
-`sh psel`/`sh acctargets`/etc. simply didn't exist under WebView. Ported the stores + all 20 handlers to
-pure C in the shared backend (`src/backend/snapstack.c`), backed by a purpose-built dotted-path JSON mutator
+`bsb`/`bse`/`bsin`/`bscls`/`bsincls`/`accl`/`acctargets`/`mkcmd`) — is hosted **in the backend**, in pure C
+(`src/backend/snapstack.c`), backed by a purpose-built dotted-path JSON mutator
 (`json_patch.c`) that generalizes `apply_engine.c`'s existing raw-splice technique instead of pulling in a
-JSON library (the backend deliberately carries none). Registered **additively** from `ui_bridge.c` before
-any frontend loads: the cmd-map overwrites on duplicate name, so under a Qt build Qt's own registrar still
-runs afterward and wins for all 20 names — Qt's behavior is unchanged; only a frontend with no registrar of
-its own (WebView) ends up running the backend copy. This kills the inline-vs-deferred apply footgun for
-WebView (each frontend previously chose the apply path at its own call sites; WebView's Save-Timeline
-regressed once from exactly that) — the shared handlers commit through one path.
+JSON library (the backend deliberately carries none). Registered from `ui_bridge.c` before the frontend
+loads: **one implementation, one store**, and every `kind=0` decl-edit op commits through the one
+**synchronous `+0x290` `apply_sync`** path (see the 2026-07-12 writeup below) — no call site can pick the
+crashing deferred path. `mkcmd` (`kind=1` prefab paste, a different operation that never crashed) stays on
+the deferred staging path.
 
-**Second attempt — the first port (commit `e7ee129`, 2026-07-09) was reset out.** That attempt predated two
-fixes since established on the Qt/WebView side and carried both bugs: (1) every apply-op scheduled via the
+**A first port (commit `e7ee129`, 2026-07-09) was reset out** — it carried two bug patterns fixed since:
+(1) every apply-op scheduled via the
 **deferred `+0xd0`** path — the same split-commit-across-threads pattern that double-frees the decl-source
 block on map teardown (see the 2026-07-12 deferred-apply writeup below); (2) several persistent `static`
 scratch buffers (256 KB × multiple call sites, a 1 MB idstr table) — the same BSS-footprint pattern that
-caused the controller-freelook regression on the `+0x298` slot. This re-port fixes both: every `kind=0`
-decl-edit op now tries the **synchronous `+0x290` `apply_sync`** first (OG-faithful inline commit), falling
-back to the deferred schedule only on an old backend without the slot; `mkcmd` (`kind=1` prefab paste, a
-different operation that never crashed) stays on the deferred path, matching Qt's convention. All scratch
-buffers are heap-allocated transiently per call (`malloc`/`free`), never `static`/BSS.
+caused the controller-freelook regression on the `+0x298` slot. The shipped port fixes both: synchronous
+`kind=0` commits, and all scratch
+buffers heap-allocated transiently per call (`malloc`/`free`), never `static`/BSS.
 
-**The bug that broke every decl-edit under WebView — `json_patch` mishandled a non-object `edit`.**
+**Store slots (`+0x2A0` `push_to_stack` / `+0x2A8` `clear_stack`).** Two vtable ext slots (ext 7/8) let the
+frontend reach the backend-owned stores from the UI: `push_to_stack` wires the Entities-tab "Push to
+stack 0" context action to the real stores (dedup on push; multi-select pushes the whole selection), and
+`clear_stack` empties stack `index` from "Clear stack 0" instead of needing the DOOM console (`sh cstk 0`)
+— it mirrors `h_cstk`'s own logic and returns the pre-clear count so the caller can toast a confirmation.
+(An earlier reverted attempt used `+0x290` for push; that offset is now `apply_sync`, so these are fresh
+appends — the append-only vtable discipline means no existing slot offset ever moves.)
+
+**The bug that broke every decl-edit driven from the UI — `json_patch` mishandled a non-object `edit`.**
 Live-tested `sh bss`/`sh acctargets` both returned `applied 0/1` with no decl change. The engine's own
 deserialize `Lexer` rejected the patched text. Root cause (found by dumping the exact bytes fed to the
 lexer): an entity you haven't hand-edited serializes its `state.edit` **overrides** block as `null` (or `{}`)
 via the `+0xc8` serialize — everything the editor *shows* on it is **inherited** from its decl, not an
 explicit override. When `json_patch` had to create a path segment (`targets`, `renderModelInfo.model`, …)
 under a non-object `edit`, it spliced a bare `"key":value` **member** where a braced **object value** was
-required, producing invalid `"edit":"targets":{…}`. Qt never hit this because QJson silently normalizes a
-null `edit` into `{}` before patching — the exact JS-`typeof null` / null-safety class of gap, one layer
+required, producing invalid `"edit":"targets":{…}` — the exact JS-`typeof null` / null-safety class of
+gap, one layer
 down in C. Fixed in `json_patch.c`: (a) the missing-path branches in `json_walk_set` / `json_walk_upsert_
 reflist` now wrap the built chain in braces (`{…}`) so it's a valid object value for both the splice-into-a-
 non-object and insert-new-member cases; (b) `json_insert_member`'s empty-object test corrected from
@@ -80,43 +52,28 @@ non-object and insert-new-member cases; (b) `json_insert_member`'s empty-object 
 a trailing comma (`{"k":v,}`) on an empty `{}` edit. Verified offline against a captured real entity plus
 null/empty/missing-`edit` variants, then live: `bss`/`acctargets` apply `1/1`.
 
-**`+0x2A0` `push_to_stack` slot.** A new vtable ext slot (ext 7) lets an out-of-process frontend (the WebView
-host) push onto the backend-owned stack a `sh <subcommand>` typed afterward will see — wiring WebView's
-"Push to stack 0" context action to the real stores. (The reverted attempt used `+0x290` for this; that
-offset is now `apply_sync`, so this is a fresh append, not a reuse — the append-only vtable discipline keeps
-an older Qt `snaphakui.dll` ABI-compatible: no existing slot offset moved.)
-
 **New backend-exclusive SnapStack+ commands** (`chkstk` / `chkgrp` / `clrgrp`) + toast polish. Store
 inspection/management the OG set lacked: `chkstk [N]` lists a stack (or summarizes all), `chkgrp [name]`
-lists a group (or all groups), `clrgrp <name>|*` deletes a group. They operate on the backend stores
-(correct under WebView; under Qt the ops use Qt's own stores, so these read the backend's separate copy — a
-known store-duplication limitation until Qt's copy is retired). Also added confirm toasts to previously
+lists a group (or all groups), `clrgrp <name>|*` deletes a group. Also added confirm toasts to previously
 silent ops (`cstk`, `phov`, `pop2g`, `pg` receiver/stack naming, `accl`/`acctargets` receiver toast) since a
 stack/group op is otherwise invisible without a `chk*`, and a `pg`/`pop2g` single letter-first arg now
 implies stack 0 (`sh pg mygroup` == `sh pg 0 mygroup`), consistent with how the operand resolver treats a
 letter-first arg as a group everywhere else.
 
-**Verified in-game (WebView build):** `psel`, `popsel`, `phov`, `cstk`, `pr`, `pg`, `pop2g`, `filtinh`,
+**Verified in-game:** `psel`, `popsel`, `phov`, `cstk`, `pr`, `pg`, `pop2g`, `filtinh`,
 `filtcls`, `bss`, `bsi`, `bsf`, `bsb`, `bse`, `bsin`, `bscls`, `bsincls`, `accl`, `acctargets`, plus the new
-`chkstk`/`chkgrp`/`clrgrp`/`snapstack_diag`, and Qt confirmed unaffected. **`mkcmd` is ported (a faithful C
-port of Qt's handler + the byte-exact prefab template) but not live-verified** — flagged as a TODO.
+`chkstk`/`chkgrp`/`clrgrp`/`snapstack_diag`. **`mkcmd` is ported (a faithful C
+port of the handler + the byte-exact prefab template) but not live-verified** — flagged as a TODO.
 
-**Next (Phase 2, follow-up):** retire Qt's own `snapstack.cpp` copy so the Qt frontend also runs the shared
-backend handlers/stores — unifying both frontends on one implementation and making `chkstk`/`chkgrp`/`clrgrp`
-correct under Qt too. Plus new commands the shared home enables (e.g. `chkstk`-adjacent tooling).
-
-## 2026-07-13 — Palette-Timeline portable-inherit normalize moved into a shared backend slot (`+0x298`); the decl-source blob lags the raw inherit by one commit
+## 2026-07-13 — Palette-Timeline portable-inherit normalize in a backend slot (`+0x298`); the decl-source blob lags the raw inherit by one commit
 
 **What & why.** A Timeline placed from the in-game SnapMap palette is spawned from a repurposed
 `snapmaps/editor_only/placeholder_target` entityDef (the only way to make a Timeline selectable in the
 palette — the clone can't fabricate one directly), so the fresh entity records *that* as its `inherit`. A
-map saved with it only reloads where our override is installed — not portable. The Qt frontend had a
-normalize (`sh_timeline_normalize_inherit`) that rewrites the inherit to the portable `snapmaps/unknown`,
-but it lived **entirely in Qt** — WebView had no equivalent, so a palette Timeline authored in WebView
-silently kept the non-portable inherit. Ported the logic into a shared backend vtable slot **`+0x298`
+map saved with it only reloads where our override is installed — not portable. The normalize rewrites the
+inherit to the portable `snapmaps/unknown`; it lives in the backend vtable slot **`+0x298`
 `normalize_timeline_inherit`** (`snaphak_iface.h`/`.c`, `apply_engine.c` `slot_normalize_timeline_inherit`,
-exported via `sh_apply_engine_get_slots`); both frontends now call one implementation. Qt's function became
-a thin wrapper over the slot (old local logic kept only as an old-backend fallback); WebView calls it from
+exported via `sh_apply_engine_get_slots`), and the frontend calls it from
 its Timeline rescan.
 
 **The bug the port exposed — the inherit blob lags one commit.** The normalize kept committing but the
@@ -128,27 +85,23 @@ reads the placeholder — and `get_inherit` (`+0x50`) reads that blob, as does t
 normalize's re-fire gate therefore **must read the blob (`defsub+0x38`), not the raw idStr (`defsub+0x58`)**:
 gating on the raw field commits exactly once and leaves the blob stuck forever; gating on the blob keeps it
 firing across rescans until a later commit's `DeclSourceRebuild` finally bakes `snapmaps/unknown` into the
-blob. This is the self-correcting behavior Qt's original `sh_tabs` `get_inherit` gate relied on — the
+blob. The
 "repeated commits" in the log are load-bearing, not waste. (A raw-field gate was tried first and confirmed
-in-game to leave both frontends stuck on the placeholder; the DECL_BLOB_OFF gate fixed it.)
+in-game to leave the entity stuck on the placeholder; the DECL_BLOB_OFF gate fixed it.)
 
-**Footprint note.** The slot heap-allocates its two 256 KB scratch buffers per call and frees them (matching
-Qt's `SH_TL_JSON_CAP`); an earlier version used two persistent 1 MB static/BSS buffers and caused a
-**controller-freelook regression** in-game (2 MB of resident BSS the Qt path never carried) — reverted, and
+**Footprint note.** The slot heap-allocates its two 256 KB scratch buffers per call and frees them;
+an earlier version used two persistent 1 MB static/BSS buffers and caused a
+**controller-freelook regression** in-game (2 MB of resident BSS) — reverted, and
 the reason it's heap-transient now.
 
-> **This retires the "freshly-placed Timeline needs a save+reload" note in [`fidelity.md`](fidelity.md)**:
-> that was never an engine limitation — it was this deferral crash plus a WebView JS bug (see below /
-> `webview-ui.md`). Both fixed; fresh placement *and* reclass now save immediately in both frontends.
+> The "freshly-placed Timeline needs a save+reload" belief was never an engine limitation — it was the
+> deferral crash plus a frontend JS bug (see below /
+> `webview-ui.md`). Both fixed; fresh placement *and* reclass now save immediately.
 
-**TODO (architectural, tracked):** the SnapStack command handlers (`snapstack.cpp`) are still **Qt-only**.
-Each frontend independently chooses inline (`+0x290`) vs deferred (`+0xd0`) at every decl-edit call site —
-a footgun that already bit twice this cycle (WebView Save Timeline silently regressed to the deferred crash
-path when one line was reverted). The durable fix is to **port SnapStack down into the backend** as shared
-command handlers (with the additional ops WebView still lacks), so both frontends send high-level intents
-through one commit path and can't diverge. Interim hardening option: make the backend's `+0xd0` schedule
-commit `kind=0` decl-edits inline anyway (only genuinely deferring `kind=1` mkcmd staging), so no frontend
-call site can pick the crashing path. See the convention note in the 2026-07-12 entry below.
+**Architectural follow-up (since done):** at the time each decl-edit call site independently chose inline
+(`+0x290`) vs deferred (`+0xd0`) — a footgun that bit twice this cycle (Save Timeline silently regressed
+to the deferred crash path when one line was reverted). The durable fix — SnapStack as shared backend
+handlers sending everything through one commit path — landed 2026-07-13/14; see the SnapStack entry above.
 
 ## 2026-07-12 — Confirmed: the decl/classname/inherit/displayname Save setters cannot overflow (contributor follow-up)
 
@@ -177,8 +130,9 @@ The long-standing SnapStack crash — run `acctargets` (or `bss`/`bsi`/`bsf`/`bs
 then trigger **any** map teardown (reload the same map, **New Map**, or load an unrelated map) and DOOM
 dies with `"Memory corruption before block!"` — an access violation at
 `DOOM+0x1ab32ee ← 0x19fd162` (`IdStrDtor`) `← 0x17ad00a` (decl-source teardown), `load_state=3`. No save
-required; the corruption is in live memory, not the map file. See [`qt-changes.md`](qt-changes.md) for the
-full investigation narrative — this entry documents the backend mechanism and the fix.
+required; the corruption is in live memory, not the map file. The investigation ruled out the commit
+content, the commit function, and a JSON-vs-node-tree architecture gap — each measured live against the
+original and found byte-identical; this entry documents the backend mechanism and the fix.
 
 **Root cause — the deferral, not the commit.** Live reverse-engineering of OG SnapHak (Beta 2) proved our
 commit body `ae_apply_one` is byte-for-byte OG's `+0xd0` commit (`FUN_180004b80`), and our committed
@@ -201,7 +155,7 @@ folded in by `iface_engine.c`). It runs the same per-item batch as the `clone_bs
 commit are atomic and the committed block has a single clean owner — OG's exact flow. Because the commit
 is now inline, callers pass their own item text with no deep-copy/pending store. Each `ae_apply_one` stays
 SEH-guarded, so an off-main reflect gap (if it ever occurred) degrades to `applied 0`, never a crash. The
-frontend routes all decl-edit ops through it (see [`qt-changes.md`](qt-changes.md)); the deferred `+0xd0`
+frontend routes all decl-edit ops through it; the deferred `+0xd0`
 schedule is kept only as a fallback for an old backend without `+0x290`, and for `mkcmd`/prefab-paste
 (`kind=1`), which never crashed and is left deferred. (During the hunt a `C2 SYNC apply: …` backend-log
 marker confirmed the inline path ran; removed in the 2026-07-13 diagnostics cleanup.)
@@ -209,16 +163,16 @@ marker confirmed the inline path ran; removed in the 2026-07-13 diagnostics clea
 This supersedes the earlier "JSON round-trip vs in-memory node-tree edit" theory: our round-trip matched
 OG's, so it was never the problem.
 
-**Also migrated to `+0x290` the same day:** **Timeline Save** and the palette-timeline **inherit-normalize**
-(`sh_timeline.cpp`, `tl_iface_schedule_apply`). The inherit-normalize is a one-shot fired by the sh_tabs
+**Also migrated to `+0x290` the same day:** **Timeline Save** and the palette-timeline **inherit-normalize**.
+The inherit-normalize is a one-shot fired by the UI's rescan
 poll; on the deferred path it never persisted reliably, so the poll kept re-firing it (a `tl-inherit-portable`
 toast on every logic-entity selection) — synchronous commit makes it a true one-shot. Fixing Timeline Save's
 double-free also cleared the downstream timeline symptoms (copy/paste being wiped, needing to "save-backout"
 before a timeline save).
 
 > **Convention going forward — commit decl edits SYNCHRONOUSLY.** Any new operation that edits an entity's
-> decl (serialize → patch → `ae_apply_one`) MUST commit inline via the `+0x290` `apply_sync` slot
-> (`iface_apply()` in the Qt frontend), NOT the deferred `+0xd0` `clone_bss_apply` schedule. The command
+> decl (serialize → patch → `ae_apply_one`) MUST commit inline via the `+0x290` `apply_sync` slot,
+> NOT the deferred `+0xd0` `clone_bss_apply` schedule. The command
 > handlers already run on the UI/think-loop thread where reflect resolves; deferring to the main-thread
 > command buffer splits the operation across frames and double-owns the decl-source block. The deferred
 > `+0xd0` path is retained only as an old-backend fallback and for prefab/mkcmd staging (`kind=1`), which
@@ -293,8 +247,8 @@ benefits the Create-from-selection direction too, not just Load/Place.
 
 Two independent bugs, both in the `+0xb0` serialize-selection path (`slot_serialize_selection`),
 found back to back while root-causing a hard DOOM crash on every "Create from selection" call. This
-backend path had never been exercised by either frontend before the webview UI's first real call
-into it — the Qt Prefabs tab has always been a "Coming soon" stub (see `sh_tabs.cpp`).
+backend path had never been exercised before the UI's first real call
+into it.
 
 ### 1. `PREFAB_TEMP_SIZE` undersized — stack buffer overflow
 
@@ -408,7 +362,7 @@ again, the staged data is untouched and a manual Ctrl+V still works once the men
 **Decision: stop automating this step.** Three attempts, three different side effects (a hard crash, a
 silent no-op, an unwanted pause menu), and each only surfaced by actually testing in DOOM. Given how
 consistently fragile this specific corner of the engine has been, `kind=2` was removed entirely --
-Load/Place is back to plain `kind=1` (identical to the Qt `mkcmd` path): stage the prefab, then tell the
+Load/Place is back to plain `kind=1` (identical to the `sh mkcmd` staging path): stage the prefab, then tell the
 user to press Ctrl+V themselves. This matches the *original* SnapHak's own actual workflow exactly (see
 the double-click investigation above) and needs zero window-focus tricks, zero risk of the side effects
 above, and zero remaining need to ever identify the mystery grab-tool object.

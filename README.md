@@ -14,14 +14,14 @@ research; the third-party runtime it links against (the DOOM engine, Microsoft's
 
 | Path | What |
 |---|---|
-| `src/backend/` | the backend DLL (`XINPUT1_3.dll`): the hook layer, 24 console commands, 9 cvars, cvar-unlock, and the resident fault-shield |
+| `src/backend/` | the backend DLL (`XINPUT1_3.dll`): the hook layer, 28 console commands, 9 cvars, cvar-unlock, and the resident fault-shield |
 | `src/ui/` | the frontend DLL (`snaphakui.dll`): the WebView2 **"SnapHak Studio"** window (`webview/` = the host + `mockup.html`) |
 | `src/common/` | the shared backend↔frontend interface ABI (`snaphak_iface.h`) |
 | `src/fault_shield/` | the recover-in-place vectored-exception fault shield (compiled into the backend) |
 | `build-backend.ps1` / `build.ps1` | compile the DLLs → `build/` (backend only · backend + frontend) |
-| `package.ps1` | assemble the deployable overlay → `dist/` (the two clone DLLs, no Qt runtime) |
+| `package.ps1` | assemble the deployable overlay → `dist/` (the two clone DLLs) |
 | `installer/` | `snaphak.exe` — the end-user install / update / uninstall CLI (Go) |
-| `docs/` | architecture · fidelity · capabilities · packaging |
+| `docs/` | architecture · capabilities · fidelity · packaging · webview-ui · backend-changes |
 
 `build/` and `dist/` are gitignored — the **source is the deliverable**; the binaries are rebuilt.
 
@@ -43,7 +43,7 @@ auto-detects your DOOM install via Steam, asks you to confirm, and installs. (Fr
 - **Go 1.21+** (only to build the installer)
 
 The frontend renders in the Microsoft Edge **WebView2 runtime** (preinstalled on Windows 11 / most Windows 10);
-its SDK is auto-fetched from NuGet at build time. No Qt or other UI toolkit to install.
+its SDK is auto-fetched from NuGet at build time. Nothing else to install.
 
 ```powershell
 # 1. compile both DLLs -> build/XINPUT1_3.dll + build/webview/snaphakui.dll
@@ -105,7 +105,7 @@ intended automation. Stubbed for now (see `release.yml`).
 
 ## Contributing
 
-Contributions are welcome. **New here?** The full guide — fresh-machine setup (Git, MSVC, Qt 5.9.9, Go), the
+Contributions are welcome. **New here?** The full guide — fresh-machine setup (Git, MSVC, Go), the
 build → package → test loop, the pull-request workflow, and the rule that the `docs/` are updated alongside
 code — is in **[`docs/contributing.md`](docs/contributing.md)**. The short version:
 

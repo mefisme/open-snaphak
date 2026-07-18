@@ -52,15 +52,23 @@ on the think-loop thread; the manual pump plus the `+0x1a0` work-queue drain *ar
 main-thread execution point (a UI-thread or RPC-thread engine call deadlocks the engine's command-system
 lock). Replicate the pump.
 
-## The 77-slot interface vtable (the matched-pair ABI)
+## The interface vtable (the matched-pair ABI)
 
 The shared interface object is defined once, in `src/common/snaphak_iface.h`, and **both DLLs
 include that header** — it is a matched pair. The backend writes the vtable and fields; the
 frontend reads them at the same offsets.
 
-- The backend builds it (`operator_new(0x60)`), installs a 77-slot vtable (`+0x00..+0x260`),
-  initializes the mutex at `+0x08`, and hangs a sub-object off `+0x58` that holds the SnapStack
-  subcommand map and the main-thread work-queue.
+- The backend builds it (`operator_new(0x60)`), installs the vtable — the **77 original-faithful
+  slots** (`+0x00..+0x260`) plus the **clone-extension slots** appended after them (`+0x268..+0x2A8`
+  today: the atomic class+inherit apply, the class/inherit enumerators, the dev-layer query, the
+  wire-edit generation counter, the synchronous `apply_sync`, the timeline inherit-normalize, and
+  push/clear-stack) — initializes the mutex at `+0x08`, and hangs a sub-object off `+0x58` that
+  holds the SnapStack subcommand map and the main-thread work-queue.
+- **Extension slots are append-only**: a new capability gets the next slot after the current end;
+  original-block offsets never move. This is also a real failure mode, not a formality — a frontend
+  calling an extension slot that an older backend never installed would call through garbage. That is
+  why `build.ps1` always builds both DLLs from the same header in one pass, and why the frontend
+  null-probes an extension slot (falling back or skipping the feature) rather than assuming it.
 - The frontend calls vtable slots for everything it needs from the engine: entity
   count/validity, classname/inherit/displayname read and write, serialize/deserialize an
   entity, apply an edit (`+0xd0`), enqueue and drain the work-queue (`+0x90` / `+0x1a0`),

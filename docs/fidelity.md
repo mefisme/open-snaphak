@@ -11,16 +11,18 @@ One behavior is a deliberate divergence from the start: the fault-shield (last s
 
 ## Still faithful (reproduced on purpose)
 
-### The Editor-Lua tab is empty
-The original's 6th tab (`Editor Lua`, internal name `lua_scripts_page`) is an empty widget — no
-children, no layout, no behavior; the Lua VM host behind it is dead code with no callers. The clone
-reproduces it as the same empty tab and ships **no Lua runtime**. A real Lua editor is still future work.
+### No Lua scripting
+The original has an `Editor Lua` tab (internal name `lua_scripts_page`) that is an empty widget — no
+children, no layout, no behavior; the Lua VM host behind it is dead code with no callers. The clone is
+faithful in substance: it ships **no Lua runtime** either. It does not render the empty tab (dead chrome
+isn't worth carrying); a real Lua editor is still future work.
 
 ### The manual 30 Hz think-loop
-The frontend runs its own `processEvents` + `Sleep(33 ms)` pump rather than `QApplication::exec()`.
-This is faithful to the original *and* load-bearing — the deferred main-thread apply path rides on
-this pump and its work-queue drain (see [`architecture.md`](architecture.md)). Reproduced exactly,
-not modernized.
+The frontend runs its own pump — drain the work-queue, apply deferred writes, pump the window's
+messages, `Sleep(33 ms)` — rather than a framework event loop. This is faithful to the original *and*
+load-bearing — heavy engine work is applied on this pump, and the pump plus the work-queue drain *are*
+the frontend's main-thread execution point (see [`architecture.md`](architecture.md)). Reproduced
+exactly, not modernized.
 
 ### Save-to-Decl does no *full* class/inherit compatibility check
 The Entity-State "Save to Decl" commits the edited classname/inherit/displayname into the entity in
@@ -39,31 +41,6 @@ populating the temp prefab. This was initially mistaken for a clone bug (see
 but is a genuine, faithfully-carried-over engine requirement, confirmed once those crashes were
 fixed. The webview UI checks for it up front (the hovered-id slot, `+0x198`) and surfaces an
 accurate "hover over an entity first" message instead of a crash or a misleading generic one.
-
-### ~~A freshly placed/reclassed Timeline needs a map save+reload before it accepts data~~ — RETRACTED 2026-07-13: was two clone bugs, not an engine limitation
-
-**This entry is retracted.** It was documented (2026-07-08) as a genuine pre-existing engine/tool
-limitation, but that conclusion was wrong. The "won't save until you save+reload the map or copy/paste
-first" behavior was **two separate clone bugs**, both since fixed — a freshly placed *or* reclassed
-Timeline now saves immediately in **both** frontends with no workaround (verified in-game 2026-07-13,
-placement and reclass, including play/save/reload persistence):
-
-1. **The crash half** (the reason copy/paste was branded "unsafe" and pinned on the engine) was our own
-   **deferred-apply double-free**: decl-edit commits were *scheduled* onto the DOOM main thread (`+0xd0`)
-   instead of committed inline, double-owning the decl-source block and freeing it twice on the next map
-   teardown. Fixed by the `+0x290` synchronous inline apply — Qt first (2026-07-12), then webview's Save
-   Timeline (2026-07-13). See [`backend-changes.md`](backend-changes.md) / [`qt-changes.md`](qt-changes.md).
-2. **The "won't save" half, webview-specific,** was a JavaScript `typeof null === 'object'` bug in
-   `tlBuildPatchedEntityJson`: a fresh Timeline serializes as `edit = NULL;` (`"edit":null`), the `null`
-   slipped past a `typeof x !== 'object'` guard, and the next property assignment threw *uncaught* — so
-   the whole Save silently aborted (no toast, nothing reached the backend). Fixed 2026-07-13 with explicit
-   `=== null` checks. See [`webview-ui.md`](webview-ui.md).
-
-The lesson kept here: the original tools were never re-tested in a way that *isolated* these two bugs, and
-the "reproduces in the unmodified original SnapHak 2 Beta" claim conflated a real-but-separate engine
-copy/paste behavior with the clone's own save failures. A cautionary example of a wrong "it's the engine,
-not us" conclusion — the discipline that eventually cracked it was a step-by-step JS→native chain trace,
-not more RE of the engine.
 
 ## Fixed (the original was wrong; the clone is now right)
 

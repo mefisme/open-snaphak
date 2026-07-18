@@ -19,6 +19,8 @@ Registered with the engine command system; run from the DOOM console.
 | `sh_entlist` | List the editor entities. |
 | `sh_listres` | List all resources of a given class (optionally copy to clipboard). |
 | `sh_type` | Print the members of an idTech class or the values of an enum (runtime introspection). Add `-v` to also show each field's byte offset and size. |
+| `sh_validclasses` | List the engine-valid classnames for a given inherit (the same enumerator that feeds the Classname dropdown). |
+| `sh_target_any` | Reveal / re-hide the campaign-only and normally-hidden placeable entity decls in the SnapMap editor palette. |
 | `sh_dumpmap` | Dump the current generated `.map` from memory (debugging). |
 | `sh_genbmodel` | Generate a bmodel from a `.obj` / `.ase` / `.lwo`. |
 | `sh_genmd6model` | Compile a `.md6model` into a `bmd6model`. |
@@ -31,6 +33,7 @@ Registered with the engine command system; run from the DOOM console.
 | `cs_start_render_logging` | Set up the render-logging hook. |
 | `snaphak_disable_devmode` | Turn developer features off while keeping Bethesda.net connectivity. |
 | `snaphak_reenable_devmode` | Turn developer features back on. |
+| `noClip` / `infiniteHealth` / `noPlayerDeath` / `noPlayerKill` / `noTarget` | The five player-cheat toggles for the local player: no-collision flight, infinite health, can't die, can't be killed, enemies ignore you. |
 
 ## Cvars
 
@@ -83,11 +86,9 @@ letter-first **group name** in place of the stack index):
 | `acctargets` | Pop the last id; append the remaining ids to its `targets` list. |
 | `mkcmd` | Synthesize a reusable command-entity macro from the stacked ids. |
 
-**New SnapStack+ commands** (backend-exclusive — not part of OG's 20; added with the port). These read/
-manage the backend's own stores, so they reflect live state under the **WebView** build (where every
-SnapStack op runs in the backend). Under the **Qt** build the ops use Qt's own in-process stores, so
-these would report the backend's separate (empty) copy — effectively WebView-only until Qt's duplicate is
-retired. Output goes to the `~` console with a summary toast.
+**New SnapStack+ commands** (clone additions — not part of OG's 20). They read and manage the same
+backend stores every SnapStack op runs against, so they always reflect live stack/group state. Output
+goes to the `~` console with a summary toast.
 
 | Op | What it does |
 |---|---|
@@ -96,19 +97,17 @@ retired. Output goes to the `~` console with a summary toast.
 | `clrgrp <name>\|*` | Delete a named group entirely (`*` deletes all). |
 | `snapstack_diag` | Report, per subcommand, which loaded DLL currently owns the handler. |
 
-## GUI tabs
+## The Studio window
 
-The "SnapHak Studio" Qt window and its tabs.
+The "SnapHak Studio" window — HTML/CSS/JS rendered in a WebView2 control, opened inside the SnapMap
+editor (run `sh` in the console if it doesn't auto-open). Full detail: [`webview-ui.md`](webview-ui.md).
 
-| Tab | What it does |
+| Surface | What it does |
 |---|---|
-| Window shell | The "SnapHak Studio" window: the 6-tab layout, the manual 30 Hz think-loop, and the always-visible Camera-Origin group. |
-| 1 — Entities | A filterable entity list; right-click an entry for Copy ID / Delete / Push to stack 0. |
-| 2 — Entity State | Read an entity's classname / inherit / displayname / decl source; "Save to Decl" commits the edits in memory. |
-| 3 — Prefabs | Save and load selection prefabs as JSON files under `%USERPROFILE%\snaphak\prefabs\`. |
-| 4 — Timelines | The list of timeline entities; double-click opens the Timeline Editor. |
-| 5 — Timeline Editor | Edit an entity's timeline — its events and per-event parameters, with reference/decl parameters constrained to valid choices. |
-| 6 — Editor Lua | Empty (faithful to the original — see [`fidelity.md`](fidelity.md)). |
+| Window shell | The Win32 host window + the manual 30 Hz think-loop; a menu bar with a light/dark theme toggle; the always-visible Camera-Origin bar (X/Y/Z track the live editor camera; "Lock Position" pins it). |
+| Entities tab | A filterable entity list (multi-select, a hidden-entity toggle, two-way editor-selection sync; right-click for Copy ID / Delete / Push to stack 0 / Clear stack 0) plus the Entity State panel: classname / inherit / displayname fields and the Decl Text editor — syntax coloring, structural lint, advisory schema checks, a distraction-free focus mode. "Save to Decl" commits the edits in memory. |
+| Prefabs tab | Save and load selection prefabs as JSON files under `%USERPROFILE%\snaphak\prefabs\` — one folder level with rename/delete/drag-between-folders; "Load / Place" stages the prefab and the user pastes it with Ctrl+V. |
+| Timelines tab | The list of timeline entities; opening one edits its events and per-event parameters, with reference/decl/enum parameters constrained to valid choices, entity pickers for entity-typed args, and per-event documentation. |
 
 ## Hook behaviors
 

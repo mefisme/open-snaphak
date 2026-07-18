@@ -51,7 +51,7 @@ You need 64-bit **Windows 10 or 11** and the tools below. Install them in this o
 
 The frontend renders in the Microsoft Edge **WebView2 runtime**, preinstalled on Windows 11 and on most
 Windows 10 (via Edge) — nothing to install to build or run. (Its SDK headers + static loader are fetched
-from NuGet at build time; there is no Qt or other UI toolkit to install.)
+from NuGet at build time; there is nothing else to install.)
 
 **Visual Studio 2022 Build Tools.** Run the installer and tick the **"Desktop development with C++"**
 workload. That installs the MSVC x64 compiler (`cl.exe`) and the Windows 10/11 SDK the build needs. The build
@@ -94,8 +94,8 @@ used above and by CI). The frontend itself is described in [`webview-ui.md`](web
 powershell -NoProfile -ExecutionPolicy Bypass -File package.ps1
 ```
 
-This assembles the deployable **2-file overlay** into **`dist/`**: the two clone DLLs (no Qt runtime — the
-frontend uses the system-installed WebView2 runtime), laid out exactly as they drop into a DOOM install,
+This assembles the deployable **2-file overlay** into **`dist/`**: the two clone DLLs (the frontend
+renders in the system-installed WebView2 runtime), laid out exactly as they drop into a DOOM install,
 alongside a `MANIFEST.sha256`. `dist/` is gitignored. See [`docs/packaging.md`](packaging.md) for the full
 file list.
 
@@ -169,8 +169,8 @@ CI runs the self-contained C tests and the installer tests on every PR; the DOOM
    `installer: fix Steam library path detection` or `backend: add sh_listwires command`.
 7. **Push** to your fork and open a **pull request against `main`**.
 8. The **CI gate** runs automatically, as two parallel jobs: a security scan (no-new-binaries ·
-   capability-surface scan · gitleaks); and the build (`build.ps1` / `package.ps1`, a bundle guard that also
-   asserts the overlay stayed Qt-free, XInput ordinal parity, the C unit tests, and the installer's
+   capability-surface scan · gitleaks); and the build (`build.ps1` / `package.ps1`, a bundle guard that
+   asserts the overlay stays the lean 2-file set, XInput ordinal parity, the C unit tests, and the installer's
    `gofmt` / `vet` / `test`). It runs in a **secretless** sandbox — fork PRs get a read-only token and zero
    repo secrets.
 9. A **maintainer reviews** and merges (changes under `.github/`, `*.ps1`, and `installer/` are
@@ -184,7 +184,8 @@ behavior change with stale docs will be sent back. Use this map:
 
 | If you change… | Update… |
 |---|---|
-| a console command, cvar, SnapStack op, or GUI tab (`src/backend/`, `src/ui/`) | [`docs/capabilities.md`](capabilities.md) — the feature inventory |
+| a console command, cvar, SnapStack op, or a Studio-window feature (`src/backend/`, `src/ui/`) | [`docs/capabilities.md`](capabilities.md) — the feature inventory |
+| the frontend UI itself (`src/ui/webview/` — the host or `mockup.html`) | [`docs/webview-ui.md`](webview-ui.md) — its reference sections + a dated Changelog entry |
 | the object model, the think-loop, the interface vtable, or the backend↔frontend boundary | [`docs/architecture.md`](architecture.md) |
 | a deliberately-reproduced original quirk, or a sanctioned divergence | [`docs/fidelity.md`](fidelity.md) |
 | a correctness bugfix in the shared `src/backend/` engine-call layer (not a fidelity divergence -- our own code was wrong) | [`docs/backend-changes.md`](backend-changes.md) |
@@ -218,9 +219,9 @@ release. **Do not open a public issue for a security problem.** Use GitHub's **p
 | `src/common/` | the shared backend↔frontend interface ABI (`snaphak_iface.h`) |
 | `installer/` | `snaphak.exe` — the Go install / update / uninstall CLI |
 | `tests/` | the C unit tests + `run-tests.ps1` |
-| `docs/` | architecture · fidelity · capabilities · packaging · this guide |
+| `docs/` | architecture · capabilities · fidelity · packaging · webview-ui · backend-changes · this guide |
 | `build-backend.ps1` / `build.ps1` | compile the DLLs → `build/` (backend only · backend + frontend) |
-| `package.ps1` | assemble the deployable overlay → `dist/` (the two clone DLLs, no Qt runtime) |
+| `package.ps1` | assemble the deployable overlay → `dist/` (the two clone DLLs) |
 | `.github/workflows/` | `ci.yml` (the PR gate) · `release.yml` (tag-triggered release) |
 | `LICENSE` | MIT |
 
