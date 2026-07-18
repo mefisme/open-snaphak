@@ -69,6 +69,7 @@ The frontend holds no engine addresses; it calls the backend only through the vt
 | Timeline event-arg dropdowns (decl / enum / per-entity asset lists) | `enum_decls_of_resclass` +0x110 -- the same shared slot for both decl-name and enum-member enumeration |
 | Save Timeline (commit `componentTimeLine` / `encounterComponent`) | `apply_edit` kind=0 -- the same path Save-to-Decl already uses, id-targeted instead of paste-targeted |
 | Send feedback (the bottom-right "?" dialog) | no engine slot -- the page posts `reportSubmit` with an opaque JSON payload; the host POSTs it to the feedback relay on a short-lived worker thread (WinHTTP, the frontend's only network touch -- see the capability note in `snaphak_ui_webview.cpp`) and answers `reportResult {ok, mode, number}` -> green/red toast. Pipeline: [`feedback.md`](feedback.md) |
+| Crash-report dialog (auto-opens on a recorded crash) | no engine slot -- the host polls `<game>\snaphak\crash\` (~2 s) for a crash record the backend wrote at fault time and posts `crashPending {record, count}`; the page auto-opens the dialog. Send composes the payload host-side (`crashSubmit` -> `category:"crash"`, optional anonymized log tails) and rides the SAME WinHTTP thread + `reportResult` as feedback; `crashDismiss` clears the pending record. Pipeline: [`feedback.md`](feedback.md) |
 
 Heavy engine writes (Save, Delete, Select-in-editor) are snapshotted in the JS message callback and
 applied on the next think-loop frame under the loop mutex, keeping them off the re-entrant callback.
@@ -83,6 +84,25 @@ through it).
 
 Newest first. Each dated entry covers one working session's worth of change; the undated **Baseline**
 entry at the bottom is the original POC buildout, before this doc tracked dates per entry.
+
+### 2026-07-18 -- Crash-report dialog
+
+- **Crash reporting**, the feedback pipeline's second producer. When the game hits a serious fault, the
+  backend fault machinery writes a small JSON **crash record** (fault class, code, `module+0xRVA`, call
+  stack, the engine's own error text when there is one, timestamp, version) to `<game>\snaphak\crash\`
+  with crash-safe file writes. The host think-loop polls that folder (~2 s, gated on the page being
+  loaded) and posts `crashPending {record, count}`; the page auto-opens a **branded** crash dialog (the
+  menubar logo + wordmark) -- in-session seconds after a *survived* fault, on the next launch for one
+  that killed the game ("Snapmap+ crashed last session"). It shows the error + collapsed call stack,
+  takes an optional description + contact, and offers an **Attach recent logs** checkbox (default on):
+  the log tails are **anonymized** host-side (account / profile / machine names scrubbed to
+  `<user>`/`<machine>` -- pure `report_scrub.h`, unit-tested) before they leave the box. Send composes
+  the payload host-side (`crashSubmit` -> `category:"crash"`) and rides the SAME WinHTTP thread +
+  `reportResult` plumbing as the feedback dialog; Dismiss (or a successful send) posts `crashDismiss`,
+  which clears the pending record so it never nags twice (the full logs + any local crash dump stay on
+  disk). The relay files it as a `[Crash]` issue whose auto-title embeds the crash location, so the
+  signature dedup groups repeats onto one issue, each occurrence's logs a collapsed follow-up comment.
+  Full pipeline: [`feedback.md`](feedback.md).
 
 ### 2026-07-18 -- Send-feedback dialog ("?"), and the focus-mode bottom-padding fix
 
