@@ -110,7 +110,7 @@ editor (run `sh` in the console if it doesn't auto-open). Full detail: [`webview
 | Entities tab | A filterable entity list (multi-select, a hidden-entity toggle, two-way editor-selection sync; right-click for Copy ID / Delete / Push to stack 0 / Clear stack 0) plus the Entity State panel: classname / inherit / displayname fields and the Decl Text editor — line numbers, syntax coloring, structural lint, advisory schema checks, a distraction-free focus mode. "Save to Decl" commits the edits in memory. |
 | Prefabs tab | Save and load selection prefabs as JSON files under `%USERPROFILE%\snaphak\prefabs\` — one folder level with rename/delete/drag-between-folders; per-prefab description + tags (stored in a `<name>.meta.json` sidecar; the filter box matches tags across folders); "Load / Place" stages the prefab and the user pastes it with Ctrl+V. |
 | Timelines tab | The list of timeline entities; opening one edits its events and per-event parameters, with reference/decl/enum parameters constrained to valid choices, entity pickers for entity-typed args, and per-event documentation. |
-| Feedback ("?") | The bottom-right "?" button opens the Send-feedback dialog: category (bug / feature / incorrect info / other), title, details, optional contact. Sending files it as a labeled issue on this repo's tracker — no GitHub account needed. See the network note below + [`feedback.md`](feedback.md). |
+| Feedback ("?") | The "?" button at the statusbar's right edge opens the Send-feedback dialog: category (bug / feature / incorrect info / other), title, details, optional contact. Sending files it as a labeled issue on this repo's tracker — no GitHub account needed. See the network note below + [`feedback.md`](feedback.md). |
 
 ## Network use
 

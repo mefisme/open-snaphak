@@ -1,9 +1,14 @@
 /* feedback/worker.js -- the feedback relay: a Cloudflare Worker that turns the in-app "Send feedback"
  * dialog's anonymous POST into a labeled issue on this project's GitHub tracker.
  *
- * Why it exists: GitHub has no anonymous write path (every API write needs a token), and a token must
- * never ship inside a public binary. So the app POSTs here, and this relay -- holding a fine-grained
- * PAT scoped to ONE repo with Issues read/write only, stored as a Worker secret -- files the issue.
+ * Why it exists: GitHub has no anonymous write path (every API write needs a credential), and a
+ * credential must never ship inside a public binary. So the app POSTs here, and this relay files the
+ * issue with a credential only it holds.
+ *
+ * Identity: preferably a GITHUB APP owned by the org (secrets APP_ID + APP_PRIVATE_KEY) -- issues then
+ * arrive from "<app-name>[bot]", not from any personal account, and tokens are minted fresh per
+ * request (the app's private key never expires -> no rotation chore). Falls back to a plain
+ * fine-grained PAT (secret GITHUB_TOKEN) when the app secrets are absent.
  *
  * Flow per report:
  *   validate (category / lengths / size) -> honeypot check -> compute a dedup signature ->
@@ -12,7 +17,8 @@
  *     miss -> create a new issue, labeled: category label + release channel + user-report
  *
  * Ops notes (see also feedback/README.md):
- *   - secret: `wrangler secret put GITHUB_TOKEN` (fine-grained PAT; expires -> annual rotation).
+ *   - secrets: `wrangler secret put APP_ID` + `APP_PRIVATE_KEY` (PKCS#8 PEM) -- or GITHUB_TOKEN as
+ *     the PAT fallback (expires -> annual rotation; the app path has no such chore).
  *   - stateless by design: no KV, no queues; GitHub Issues is the only store.
  *   - abuse posture: honeypot + size caps here; if real spam ever shows up, add a Cloudflare
  *     rate-limiting rule on the dashboard (no code change needed).
@@ -35,12 +41,12 @@ function json(obj, status) {
   });
 }
 
-async function gh(env, path, opts) {
+async function gh(bearer, path, opts) {
   const o = opts || {};
   const res = await fetch(API + path, {
     method: o.method || 'GET',
     headers: {
-      'Authorization': 'Bearer ' + env.GITHUB_TOKEN,
+      'Authorization': 'Bearer ' + bearer,
       'Accept': 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'snaphak-feedback-relay',
@@ -50,6 +56,38 @@ async function gh(env, path, opts) {
   });
   if (!res.ok) return null;
   return res.json();
+}
+
+/* ---- GitHub App auth: a short-lived RS256 JWT (signed with the app's private key) is exchanged for
+ * a ~1h installation token, cached across requests in this isolate. The app's key is long-lived but
+ * never leaves the Worker secret store; the tokens GitHub actually sees expire on their own. ---- */
+let tokenCache = { token: null, exp: 0 };
+
+function b64u(bytes) {
+  return btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function appJwt(env) {
+  const now = Math.floor(Date.now() / 1000);
+  const enc = new TextEncoder();
+  const head = b64u(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
+  const pay = b64u(enc.encode(JSON.stringify({ iat: now - 60, exp: now + 540, iss: String(env.APP_ID) })));
+  const pem = env.APP_PRIVATE_KEY.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+  const der = Uint8Array.from(atob(pem), c => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(head + '.' + pay));
+  return head + '.' + pay + '.' + b64u(sig);
+}
+async function authToken(env) {
+  if (!(env.APP_ID && env.APP_PRIVATE_KEY)) return env.GITHUB_TOKEN || null;   // PAT fallback
+  const now = Date.now() / 1000;
+  if (tokenCache.token && now < tokenCache.exp - 120) return tokenCache.token;
+  const jwt = await appJwt(env);
+  const inst = await gh(jwt, '/repos/' + REPO + '/installation');   // which installation covers the repo
+  if (!inst || !inst.id) return null;
+  const tok = await gh(jwt, '/app/installations/' + inst.id + '/access_tokens', { method: 'POST' });
+  if (!tok || !tok.token) return null;
+  tokenCache = { token: tok.token, exp: now + 3300 };   // installation tokens live ~1h
+  return tok.token;
 }
 
 /* dedup signature: category + normalized title -> first 16 hex of SHA-256. Embedded in the issue body
@@ -114,14 +152,27 @@ export default {
 
     const channel = channelOf(version);
     const sig = await sigHash(body.category, title);
+    const token = await authToken(env);
+    if (!token) return json({ ok: false, error: 'relay auth' }, 500);
 
-    /* dedup (best-effort: a search failure falls through to plain create). Closed matches are NOT
-     * resurrected -- closed means resolved or rejected; a fresh report opens a fresh issue. */
-    const q = 'repo:' + REPO + ' is:issue is:open "report-sig:' + sig + '"';
-    const found = await gh(env, '/search/issues?per_page=1&q=' + encodeURIComponent(q));
-    if (found && found.total_count > 0 && found.items && found.items[0]) {
-      const n = found.items[0].number;
-      const c = await gh(env, '/repos/' + REPO + '/issues/' + n + '/comments', {
+    /* dedup (best-effort: a lookup failure falls through to plain create). Deliberately the LIST
+     * endpoint + a body scan, NOT the search API: search is eventually-consistent (seconds-to-minutes
+     * of index lag), so two reports of the same thing in quick succession -- or one user's double-send
+     * -- would slip past it and double-file (observed live, 2026-07-18). Listing open user-report
+     * issues is strongly consistent; up to 3 pages (300 open reports) is far beyond a realistic
+     * tracker. Closed matches are NOT resurrected -- closed means resolved or rejected; a fresh
+     * report opens a fresh issue. */
+    let match = null;
+    const marker = 'report-sig:' + sig;
+    for (let page = 1; page <= 3 && !match; page++) {
+      const batch = await gh(token, '/repos/' + REPO + '/issues?state=open&labels=user-report&per_page=100&page=' + page);
+      if (!batch || !batch.length) break;
+      match = batch.find(i => !i.pull_request && (i.body || '').includes(marker)) || null;
+      if (batch.length < 100) break;
+    }
+    if (match) {
+      const n = match.number;
+      const c = await gh(token, '/repos/' + REPO + '/issues/' + n + '/comments', {
         method: 'POST',
         body: { body: commentBody(details, version, channel, contact) },
       });
@@ -131,7 +182,7 @@ export default {
 
     const labels = [cat.label, 'user-report'];
     if (channel) labels.push(channel);
-    const issue = await gh(env, '/repos/' + REPO + '/issues', {
+    const issue = await gh(token, '/repos/' + REPO + '/issues', {
       method: 'POST',
       body: {
         title: '[' + cat.tag + '] ' + title,

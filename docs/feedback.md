@@ -15,11 +15,13 @@ User clicks "?" -> Send-feedback dialog (category / title / details / optional c
 
 ## Why a relay
 
-GitHub has no anonymous write path — filing an issue requires a token, and a token must never ship
-inside a public binary. The relay is the smallest possible fix: a stateless Worker that accepts the
-app's unauthenticated POST and files the issue with a fine-grained PAT (this repo only, Issues
-read/write only) stored as a Worker secret. Users need no account of any kind. Deploy + token
-rotation runbook: [`feedback/README.md`](../feedback/README.md).
+GitHub has no anonymous write path — filing an issue requires a credential, and a credential must
+never ship inside a public binary. The relay is the smallest possible fix: a stateless Worker that
+accepts the app's unauthenticated POST and files the issue as the org's **GitHub App bot identity**
+(installed on this repo with Issues read/write only — reports arrive from `<app-name>[bot]`, not a
+personal account, and the app's key mints short-lived tokens per request, so there is no expiring
+credential to rotate). Users need no account of any kind. Deploy + credential runbook:
+[`feedback/README.md`](../feedback/README.md).
 
 ## What a filed issue looks like
 
@@ -59,6 +61,6 @@ question — apply by hand to arm the stale sweep), `stale` (the sweep's warning
 | Failure | What happens |
 |---|---|
 | Relay down / offline / DNS | Red toast in-app ("could not send"); the dialog stays open with everything typed. |
-| PAT expired (annual rotation missed) | Same red toast; fixed by rotating the secret — [`feedback/README.md`](../feedback/README.md). |
+| App key revoked / secrets misconfigured (or, on the PAT fallback, token expired) | Same red toast; fixed by re-storing the secrets — [`feedback/README.md`](../feedback/README.md). |
 | Spam | Honeypot + size caps in the relay; escalation is a Cloudflare rate-limit rule (dashboard, no code). Worst case is deletable spam issues — the token can't touch anything but Issues. |
 | GitHub API down | The relay returns failure → red toast; nothing is queued or lost silently. |

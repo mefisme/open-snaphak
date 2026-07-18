@@ -302,12 +302,11 @@
   .modal textarea { min-height: 54px; resize: vertical; }
   .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 
-  /* feedback: the bottom-right "?" launcher + its report dialog. The button floats just above the
-     statusbar; z-index below the modal layer (3000) so an open dialog covers it. */
-  #reportBtn { position: fixed; right: 12px; bottom: 34px; width: 30px; height: 30px; border-radius: 50%;
-    border: 1px solid var(--border2); background: var(--panel); color: var(--muted); font-size: 14px; font-weight: 600;
-    display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 1900;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+  /* feedback: the "?" launcher (the statusbar's rightmost item, the footer counterpart of the menubar
+     logo) + its report dialog. */
+  #reportBtn { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border2);
+    background: var(--panel); color: var(--muted); font-size: 11px; font-weight: 600; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
   #reportBtn:hover { color: var(--text); border-color: var(--accent); }
   .modal.report { width: 430px; }
   .modal.report textarea { min-height: 110px; }
@@ -500,6 +499,7 @@
     <span>Selected: <b id="selCount">0</b></span>
     <span class="spacer"></span>
     <span id="stamp"></span>
+    <button type="button" id="reportBtn" title="Report a bug or suggest a feature">?</button>
   </div>
 </div>
 
@@ -526,7 +526,6 @@
   </div>
 </div>
 
-<button type="button" id="reportBtn" title="Report a bug or suggest a feature">?</button>
 <div class="modal-overlay" id="reportModal" style="display:none;">
   <div class="modal report">
     <div class="modal-title">Send feedback</div>

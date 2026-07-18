@@ -86,8 +86,9 @@ entry at the bottom is the original POC buildout, before this doc tracked dates 
 
 ### 2026-07-18 -- Send-feedback dialog ("?"), and the focus-mode bottom-padding fix
 
-- **In-app feedback.** A "?" circle button floats bottom-right (above the statusbar); it opens a
-  Send-feedback modal (category / title / details / optional contact, plus a hidden honeypot field).
+- **In-app feedback.** A compact "?" circle sits at the statusbar's right edge (the footer counterpart
+  of the menubar logo); it opens a Send-feedback modal (category / title / details / optional contact,
+  plus a hidden honeypot field).
   Send posts `reportSubmit` with the whole report as one opaque JSON payload (the page composes it,
   including the installed version from the `list` message); the host ships it to the feedback relay on
   a short-lived WinHTTP thread (the think loop + WebView2 callbacks share one STA thread -- a

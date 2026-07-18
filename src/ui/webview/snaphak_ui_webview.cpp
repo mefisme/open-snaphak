@@ -1330,7 +1330,7 @@ static void poc_apply_save_prefab_meta(const std::string &name, const std::strin
  * thread, so a synchronous WinHTTP call there would freeze the whole UI for up to the timeout. The
  * thread only touches the g_report_* cells; the think loop polls g_report_done and posts the result to
  * the page from the correct (loop) thread, like every other *Result message. */
-static const wchar_t *kReportHost = L"REPLACE-WITH-DEPLOYED-RELAY.workers.dev";   /* set at release-bake time; unreachable -> red toast, nothing else */
+static const wchar_t *kReportHost = L"snaphak-feedback.open-snaphak.workers.dev";   /* the deployed relay (feedback/); unreachable -> red toast, nothing else */
 static const wchar_t *kReportPath = L"/report";
 #define REPORT_PAYLOAD_CAP (64 * 1024)
 
