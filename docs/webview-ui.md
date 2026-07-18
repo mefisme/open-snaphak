@@ -39,7 +39,7 @@ installer\snaphak.exe install --local dist --yes                          # depl
 ```
 
 `package.ps1` assembles a lean overlay that ships **only** the two clone DLLs (the WebView2 runtime is
-system-installed). Runtime log: `<DOOM>\snaphak_logs\webview_poc.log`.
+system-installed). Runtime log: `<DOOM>\snaphak\logs\webview_poc.log`.
 
 ## How it maps to the backend interface
 

@@ -5,7 +5,7 @@
  * EARLY-OUTS on any fault whose RIP is not inside DOOMx64vk.exe -- it is an in-editor draw-fault
  * recovery handler, not a logger. So a crash in OUR DLL, in a system/runtime DLL, in non-frame engine
  * code, or a fault the shield does not recover leaves NO trace. This module records where the process dies + what was
- * loaded, to snaphak_diag.log (text) and snaphak_crash.dmp (a minidump) next to the DLL.
+ * loaded, to snaphak_diag.log (text) and snaphak_crash.dmp (a minidump) under <DOOM>\snaphak\logs\.
  *
  * SAFETY (this ships to a stranger -- it must NEVER make the crash worse or hide it):
  *  - Every handler is LOG-ONLY and returns EXCEPTION_CONTINUE_SEARCH; it never edits the CONTEXT.
@@ -260,7 +260,7 @@ static void write_minidump(PEXCEPTION_POINTERS ep)
     HANDLE h;
     MINIDUMP_EXCEPTION_INFORMATION mei;
     if (!g_dir[0]) return;
-    _snprintf_s(path, sizeof path, _TRUNCATE, "%s\\snaphak_logs\\snaphak_crash.dmp", g_dir);
+    _snprintf_s(path, sizeof path, _TRUNCATE, "%s\\snaphak\\logs\\snaphak_crash.dmp", g_dir);
     h = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (h == INVALID_HANDLE_VALUE) { diag_log("minidump: CreateFile failed (err=%lu)", GetLastError()); return; }
     mei.ThreadId = GetCurrentThreadId();
@@ -419,9 +419,11 @@ void shield_diag_install(HINSTANCE self)
     else {
         char *slash = strrchr(path, '\\');
         if (slash) { *slash = '\0'; strncpy_s(g_dir, sizeof g_dir, path, _TRUNCATE); *slash = '\\'; }
-        /* group the diag log + crash dump under <DOOM>\snaphak_logs\ (g_dir stays the DOOM root for the env dump) */
-        { char ld[MAX_PATH]; _snprintf_s(ld, MAX_PATH, _TRUNCATE, "%s\\snaphak_logs", g_dir); CreateDirectoryA(ld, NULL); }
-        _snprintf_s(g_logpath, MAX_PATH, _TRUNCATE, "%s\\snaphak_logs\\snaphak_diag.log", g_dir);
+        /* group the diag log + crash dump under <DOOM>\snaphak\logs\ (g_dir stays the DOOM root for the
+         * env dump; parent then child -- CreateDirectory makes one level at a time) */
+        { char ld[MAX_PATH]; _snprintf_s(ld, MAX_PATH, _TRUNCATE, "%s\\snaphak", g_dir); CreateDirectoryA(ld, NULL);
+          _snprintf_s(ld, MAX_PATH, _TRUNCATE, "%s\\snaphak\\logs", g_dir); CreateDirectoryA(ld, NULL); }
+        _snprintf_s(g_logpath, MAX_PATH, _TRUNCATE, "%s\\snaphak\\logs\\snaphak_diag.log", g_dir);
     }
 
     /* Install crash catchers immediately (loader-lock-safe APIs). Capture the previous UEF EXACTLY

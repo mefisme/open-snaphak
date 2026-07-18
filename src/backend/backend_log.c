@@ -12,10 +12,13 @@ void backend_set_logpath_from_module(HINSTANCE self)
     if (len == 0 || len >= MAX_PATH) { strcpy_s(g_logpath, MAX_PATH, "snaphak_backend.log"); return; }
     char *slash = strrchr(path, '\\');
     if (slash) *(slash + 1) = '\0'; else path[0] = '\0';
-    /* keep the DOOM install dir clean: group all logs under <DOOM>\snaphak_logs\ */
+    /* keep the DOOM install dir clean: group all logs under <DOOM>\snaphak\logs\ (parent first --
+     * CreateDirectory makes one level at a time; both calls idempotent) */
     char dir[MAX_PATH];
-    _snprintf_s(dir, MAX_PATH, _TRUNCATE, "%ssnaphak_logs", path);
-    CreateDirectoryA(dir, NULL);   /* idempotent; ignores "already exists" */
+    _snprintf_s(dir, MAX_PATH, _TRUNCATE, "%ssnaphak", path);
+    CreateDirectoryA(dir, NULL);
+    _snprintf_s(dir, MAX_PATH, _TRUNCATE, "%ssnaphak\\logs", path);
+    CreateDirectoryA(dir, NULL);
     _snprintf_s(g_logpath, MAX_PATH, _TRUNCATE, "%s\\snaphak_backend.log", dir);
 }
 

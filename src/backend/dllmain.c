@@ -364,12 +364,12 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved)
     (void)reserved;
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(hinst);
-        backend_set_logpath_from_module(hinst);   /* snaphak_backend.log next to this DLL */
-        shield_set_logpath_from_module(hinst);     /* shield_faults.log next to this DLL (shield's own log) */
+        backend_set_logpath_from_module(hinst);   /* snaphak_backend.log under <DOOM>\snaphak\logs\ */
+        shield_set_logpath_from_module(hinst);     /* shield_faults.log under <DOOM>\snaphak\logs\ (shield's own log) */
 #ifdef SNAPHAK_DIAG
         /* DIAGNOSTIC build only: arm the catch-all crash + environment logger FIRST, so it captures a
          * crash ANYWHERE (incl. outside the recovery shield's DOOM-only VEH, and __fastfail/heap faults).
-         * Log-only -- never alters control flow. Writes snaphak_diag.log next to this DLL. */
+         * Log-only -- never alters control flow. Writes snaphak_diag.log under <DOOM>\snaphak\logs\. */
         shield_diag_install(hinst);
 #endif
         /* Don't do engine work in DllMain (loader lock). Spin the bootstrap onto its own thread. */

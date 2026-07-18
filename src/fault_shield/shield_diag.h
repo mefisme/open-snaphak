@@ -3,7 +3,7 @@
  * A catch-all crash + environment logger for diagnosing a remote end-user's crash that the recovery
  * shield's VEH does NOT trap (a fault outside DOOM's code, or a __fastfail/heap-corruption). LOG-ONLY:
  * it never alters control flow, so it cannot change crash behavior -- safe to ship to an end-user.
- * Writes snaphak_diag.log next to the DLL. See shield_diag.c.
+ * Writes snaphak_diag.log under <DOOM>\snaphak\logs\. See shield_diag.c.
  */
 #ifndef SNAPHAK_SHIELD_DIAG_H
 #define SNAPHAK_SHIELD_DIAG_H

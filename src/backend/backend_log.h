@@ -6,7 +6,7 @@
 
 #include <windows.h>
 
-/* Set the log path to <dir-of-self>\snaphak_backend.log. Call once from DllMain. */
+/* Set the log path to <dir-of-self>\snaphak\logs\snaphak_backend.log. Call once from DllMain. */
 void backend_set_logpath_from_module(HINSTANCE self);
 
 /* Timestamp + "[snaphak] " prefix; write to OutputDebugStringA and append to the log file. */

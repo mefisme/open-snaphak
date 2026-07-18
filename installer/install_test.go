@@ -10,7 +10,8 @@ import (
 
 // TestInstallUninstallRoundTrip exercises install -> uninstall against a synthetic bundle + fake DOOM dir.
 // Fully hermetic (no real DOOM, no network): it verifies the overlay deploys, a pre-existing file is backed
-// up, and uninstall restores the original + removes everything it placed (including snaphak_logs/).
+// up, a legacy root-level snaphak_logs/ is migrated into snaphak/logs/ on install, and uninstall restores
+// the original + removes everything it placed (including the runtime-logs dir).
 func TestInstallUninstallRoundTrip(t *testing.T) {
 	tmp := t.TempDir()
 	doom := filepath.Join(tmp, "DOOM")
@@ -21,6 +22,9 @@ func TestInstallUninstallRoundTrip(t *testing.T) {
 	// a pre-existing file to exercise backup/restore
 	writeF(t, filepath.Join(doom, "DOOMx64vk.exe"), "exe")
 	writeF(t, filepath.Join(doom, "XINPUT1_3.dll"), "ORIGINAL")
+
+	// a legacy root-level logs dir from an older install -- install must fold it into snaphak\logs\
+	writeF(t, filepath.Join(doom, "snaphak_logs", "old_backend.log"), "old log")
 
 	// a synthetic dist with a MANIFEST.sha256 (matches package.ps1's "hash  relpath" format)
 	overlay := map[string]string{
@@ -45,10 +49,15 @@ func TestInstallUninstallRoundTrip(t *testing.T) {
 	if got := readF(t, filepath.Join(doom, "XINPUT1_3.dll")); got != "backend" {
 		t.Errorf("deployed XINPUT1_3.dll = %q, want %q", got, "backend")
 	}
+	if got := readF(t, filepath.Join(doom, "snaphak", "logs", "old_backend.log")); got != "old log" {
+		t.Errorf("legacy log migrated = %q, want %q", got, "old log")
+	}
+	if exists(filepath.Join(doom, "snaphak_logs")) {
+		t.Error("legacy snaphak_logs dir should be gone after migration")
+	}
 
-	// simulate a runtime log dir that uninstall must clean
-	mkdirAll(t, filepath.Join(doom, "snaphak_logs"))
-	writeF(t, filepath.Join(doom, "snaphak_logs", "snaphak_backend.log"), "log")
+	// simulate runtime logs written since install that uninstall must clean
+	writeF(t, filepath.Join(doom, "snaphak", "logs", "snaphak_backend.log"), "log")
 
 	if err := cmdUninstall(flags{}); err != nil {
 		t.Fatalf("uninstall: %v", err)
@@ -56,10 +65,42 @@ func TestInstallUninstallRoundTrip(t *testing.T) {
 	if got := readF(t, filepath.Join(doom, "XINPUT1_3.dll")); got != "ORIGINAL" {
 		t.Errorf("after uninstall XINPUT1_3.dll = %q, want the restored %q", got, "ORIGINAL")
 	}
-	for _, p := range []string{"snaphak", "platforms", "snaphak_logs", "XINPUT1_3.dll.snaphak-bak"} {
+	for _, p := range []string{"snaphak", "platforms", "XINPUT1_3.dll.snaphak-bak"} {
 		if exists(filepath.Join(doom, p)) {
 			t.Errorf("expected %q removed after uninstall", p)
 		}
+	}
+}
+
+// TestMigrateLegacyLogs covers the legacy snaphak_logs -> snaphak\logs fold directly (the round-trip test
+// exercises it via cmdInstall too, but that path refuses while a real DOOM runs on the dev box -- this one
+// always runs).
+func TestMigrateLegacyLogs(t *testing.T) {
+	tmp := t.TempDir()
+	doom := filepath.Join(tmp, "DOOM")
+	writeF(t, filepath.Join(doom, "snaphak_logs", "a.log"), "A")
+	writeF(t, filepath.Join(doom, "snaphak_logs", "b.log"), "B")
+	// a name collision: the new location already has b.log -> keep the new one, leave the old copy behind
+	writeF(t, filepath.Join(doom, "snaphak", "logs", "b.log"), "NEW")
+	migrateLegacyLogs(doom)
+	if got := readF(t, filepath.Join(doom, "snaphak", "logs", "a.log")); got != "A" {
+		t.Errorf("migrated a.log = %q, want %q", got, "A")
+	}
+	if got := readF(t, filepath.Join(doom, "snaphak", "logs", "b.log")); got != "NEW" {
+		t.Errorf("colliding b.log = %q, want the pre-existing %q kept", got, "NEW")
+	}
+	if !exists(filepath.Join(doom, "snaphak_logs", "b.log")) {
+		t.Error("colliding old b.log should stay behind (old dir kept, since non-empty)")
+	}
+	// no collisions: a fresh legacy dir migrates fully and the emptied dir is removed
+	doom2 := filepath.Join(tmp, "DOOM2")
+	writeF(t, filepath.Join(doom2, "snaphak_logs", "only.log"), "x")
+	migrateLegacyLogs(doom2)
+	if exists(filepath.Join(doom2, "snaphak_logs")) {
+		t.Error("emptied legacy dir should be removed after a full migration")
+	}
+	if got := readF(t, filepath.Join(doom2, "snaphak", "logs", "only.log")); got != "x" {
+		t.Errorf("migrated only.log = %q, want %q", got, "x")
 	}
 }
 

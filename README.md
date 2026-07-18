@@ -156,7 +156,7 @@ served from memory, never written to your folder; delete your file at one of tho
 default back), then the game's own packaged resource. A broken override set can be bisected by setting
 the `snaphak_user_overrides` cvar to 0 (ignores your files; built-ins still serve) or renaming the
 `overrides` folder. The backend log lists your active overrides at startup. Runtime logs go to
-`<DOOM>\snaphak_logs\`.
+`<DOOM>\snaphak\logs\` (older releases used a root-level `snaphak_logs\`; install/update folds it in).
 
 ## License
 

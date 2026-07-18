@@ -147,10 +147,41 @@ func cmdInstall(f flags) error {
 	if err := saveRecord(rec); err != nil {
 		return fmt.Errorf("installed the files, but couldn't write the install record (%v) -- uninstall may not fully clean up", err)
 	}
+	migrateLegacyLogs(doom) // runtime logs moved to snaphak\logs\ -- fold an older install's snaphak_logs\ in (best-effort)
 	fmt.Printf("Done. SnapHak %s installed.\n", rec.Version)
 	ensureWebView2Runtime(f) // the HTML UI renders in the WebView2 runtime -- ensure it's present (never fails the install)
 	fmt.Println("Launch DOOM and open the SnapMap editor.")
 	return nil
+}
+
+// migrateLegacyLogs folds a pre-existing root-level snaphak_logs\ (where runtime logs lived before they
+// moved under snaphak\logs\) into the new location, so an update doesn't strand old logs in a dir
+// nothing writes to anymore. Best-effort: a file that won't move (locked, name collision) stays behind
+// and the old dir is then left in place; never fails the install.
+func migrateLegacyLogs(doom string) {
+	old := filepath.Join(doom, "snaphak_logs")
+	entries, err := os.ReadDir(old)
+	if err != nil {
+		return // nothing to migrate
+	}
+	newDir := filepath.Join(doom, "snaphak", "logs")
+	if err := os.MkdirAll(newDir, 0o755); err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		dst := filepath.Join(newDir, e.Name())
+		if _, err := os.Stat(dst); err == nil {
+			continue // already exists at the new location -- keep it, leave the old copy
+		}
+		os.Rename(filepath.Join(old, e.Name()), dst)
+	}
+	if rest, err := os.ReadDir(old); err == nil && len(rest) == 0 {
+		os.Remove(old)
+		fmt.Println("  ~ moved runtime logs into snaphak\\logs\\")
+	}
 }
 
 func cmdUpdate(f flags) error {
@@ -211,8 +242,10 @@ func cmdUninstall(f flags) error {
 		}
 		fmt.Printf("  ~ restored %s\n", bk.Rel)
 	}
-	// 3) clean up the dirs we created. snaphak_logs/ is unambiguously ours (runtime logs) -> remove it whole;
-	//    snaphak/ + platforms/ only if now empty (a pre-existing tree is left intact).
+	// 3) clean up the dirs we created. The runtime-logs dir (snaphak\logs\; older installs used a
+	//    root-level snaphak_logs\) is unambiguously ours -> remove it whole; snaphak/ + platforms/
+	//    only if now empty (a pre-existing tree is left intact).
+	os.RemoveAll(filepath.Join(doom, "snaphak", "logs"))
 	os.RemoveAll(filepath.Join(doom, "snaphak_logs"))
 	removeIfEmpty(filepath.Join(doom, "snaphak"))
 	removeIfEmpty(filepath.Join(doom, "platforms"))

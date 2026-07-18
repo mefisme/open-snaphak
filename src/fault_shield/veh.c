@@ -617,7 +617,7 @@ static LONG CALLBACK shield_veh(PEXCEPTION_POINTERS ep)
                 "Fault:  %s (0x%08lx)%s 0x%llx\n"
                 "Where:  DOOMx64vk.exe+0x%llx\n\n"
                 "Call stack:\n    %s\n\n"
-                "Full details were written to:\n    <DOOM folder>\\snaphak_logs\\shield_faults.log",
+                "Full details were written to:\n    <DOOM folder>\\snaphak\\logs\\shield_faults.log",
                 exc_name(code), (unsigned long)code, dir, (unsigned long long)(uintptr_t)fault_addr,
                 (unsigned long long)rva, g_crashstk[0] ? g_crashstk : "(unavailable)");
             /* FREE THE MOUSE: DOOM clips the cursor to its window + hides it (captured input), so the user

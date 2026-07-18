@@ -157,9 +157,10 @@ static int    g_tl_count = 0;
 /* ------------------------------------------------------------------ tiny file log ------------------ */
 static void poc_log(const char *msg)
 {
-    CreateDirectoryA("snaphak_logs", nullptr);
+    CreateDirectoryA("snaphak", nullptr);        /* one level at a time; both idempotent */
+    CreateDirectoryA("snaphak\\logs", nullptr);
     FILE *f = nullptr;
-    if (fopen_s(&f, "snaphak_logs\\webview_poc.log", "a") == 0 && f) {
+    if (fopen_s(&f, "snaphak\\logs\\webview_poc.log", "a") == 0 && f) {
         SYSTEMTIME t; GetLocalTime(&t);
         fprintf(f, "[%02d:%02d:%02d] %s\n", t.wHour, t.wMinute, t.wSecond, msg);
         fclose(f);
