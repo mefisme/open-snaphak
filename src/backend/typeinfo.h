@@ -104,12 +104,12 @@ typedef struct sh_ti_record { const char *name; const char *super; } sh_ti_recor
 
 /* Like sh_typeinfo_collect_classnames but also returns each record's superclass name (for the local
  * derive-from-Y walk). THREAD-SAFE: roots the type array via the reflect accessor (game thread) OR the
- * container global (Qt UI thread, where reflect is null) -- raw reads either way. Returns the count, or -1. */
+ * container global (the UI thread, where reflect is null) -- raw reads either way. Returns the count, or -1. */
 int sh_typeinfo_collect_records(sh_ti_record *out, int cap);
 
 /* Enumerate the LIVE entityDef decl manager -- the complete valid-INHERIT set (every loaded entityDef, ~2,500).
  * Raw walk of the mgr @ RESOURCE_MGR_CTX_RVA (array@+0x20, count@+0x28, decl name@+0x08) -- no engine call, so
- * thread-safe on the Qt UI thread. Collects up to `cap` decl-name pointers into out_names[]; returns the count,
+ * thread-safe on the UI thread. Collects up to `cap` decl-name pointers into out_names[]; returns the count,
  * or -1 if the manager is unreachable (caller falls back to a static list). */
 int sh_typeinfo_collect_inherits(const char **out_names, int cap);
 

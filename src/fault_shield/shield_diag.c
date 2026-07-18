@@ -3,8 +3,8 @@
  * WHY THIS EXISTS: a remote end-user's DOOM crashes where the author's does not (works on our box).
  * The backend init completes cleanly in their log, and the recovery shield's VEH (veh.c) deliberately
  * EARLY-OUTS on any fault whose RIP is not inside DOOMx64vk.exe -- it is an in-editor draw-fault
- * recovery handler, not a logger. So a crash in OUR DLL, in Qt, in non-frame engine code, or a fault
- * the shield does not recover leaves NO trace. This module records where the process dies + what was
+ * recovery handler, not a logger. So a crash in OUR DLL, in a system/runtime DLL, in non-frame engine
+ * code, or a fault the shield does not recover leaves NO trace. This module records where the process dies + what was
  * loaded, to snaphak_diag.log (text) and snaphak_crash.dmp (a minidump) next to the DLL.
  *
  * SAFETY (this ships to a stranger -- it must NEVER make the crash worse or hide it):

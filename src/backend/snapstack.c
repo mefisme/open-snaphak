@@ -1,10 +1,10 @@
-/* snapstack.c -- see snapstack.h. Pure-C backend port of src/ui/snapstack.cpp's stores + 20 handlers.
- * Faithful to the Qt implementation's semantics + VERBATIM toast text (including the filtcls "had
- * inherit" OG-mislabel fix already present there); the JSON structural work (walk/create a dotted path,
- * dedup-merge a reference list) is delegated to json_patch.c instead of QJsonObject.
+/* snapstack.c -- see snapstack.h. The SnapStack stores + 20 `sh` subcommand handlers, in pure C.
+ * Faithful to the original's semantics + VERBATIM toast text (including a fix for the original's
+ * filtcls mislabel -- it reused filtinh's "had inherit" string); the JSON structural work (walk/create
+ * a dotted path, dedup-merge a reference list) is delegated to json_patch.c.
  *
  * SECOND ATTEMPT (2026-07-13): a first port (commit e7ee129, 2026-07-09) was hard-reset out after a
- * live-tested regression. Postmortem: it predated TWO fixes since established on the Qt/webview side
+ * live-tested regression. Postmortem: it predated TWO fixes established since
  * (see docs/backend-changes.md's deferred-apply writeup + the +0x298 normalize-timeline-inherit incident)
  * and carried both bugs itself: (1) every apply-op scheduled via the DEFERRED +0xd0 apply_edit -- the
  * exact split-commit-across-threads pattern that double-frees the decl-source block on the next map
@@ -13,8 +13,8 @@
  * regression when tried on the timeline-inherit slot. This rewrite fixes both: every kind=0 apply-op now
  * tries the SYNCHRONOUS +0x290 apply_sync first (OG-faithful inline commit; see ic_apply below), falling
  * back to the deferred schedule only for an old backend without the slot; mkcmd (kind=1, a different
- * operation that never exhibited the crash) stays on the deferred path, matching Qt's own convention. All
- * scratch buffers are heap-allocated transiently per call (malloc/free), never static/BSS.
+ * operation that never exhibited the crash) stays on the deferred path, matching the original's
+ * convention. All scratch buffers are heap-allocated transiently per call (malloc/free), never static/BSS.
  *
  * Clean-room: ported from our own RE. Zero OG SnapHak bytes.
  */
@@ -189,10 +189,10 @@ static const char *arg_at(int argc, const char **argv, int n)
 }
 
 /* ============================================================ engine-touch helpers ================== */
-/* Thin wrappers over the SAME sh_iface vtable slots Qt's snapstack.cpp calls -- this module runs
- * in-process with the backend that OWNS the interface object, but still goes through the vtable (not a
- * direct internal call) so the call shape matches the proven Qt implementation exactly. Every one
- * null-checks the slot -> a clean degrade on a partial/older interface. */
+/* Thin wrappers over the sh_iface vtable slots -- this module runs in-process with the backend that
+ * OWNS the interface object, but still goes through the vtable (not a direct internal call) so it
+ * exercises the exact proven call shape any frontend uses. Every one null-checks the slot -> a clean
+ * degrade on a partial/older interface. */
 
 static int ic_get_selection(sh_iface *iface, int *out, int cap)
 {
@@ -272,7 +272,7 @@ static void ic_id_string(sh_iface *iface, int id, char *buf, int cap)
     }
     if (buf[0] == '\0') _snprintf_s(buf, (size_t)cap, _TRUNCATE, "%d", id);
 }
-#define SH_APPLY_JSON_CAP (256 * 1024)   /* mirrors Qt's own cap -- the full-entity JSON can be large */
+#define SH_APPLY_JSON_CAP (256 * 1024)   /* the full-entity JSON can be large; 256 KB proven sufficient */
 static int ic_serialize_entity(sh_iface *iface, int id, char *out, int cap)
 {
     out[0] = '\0';
@@ -286,7 +286,7 @@ static int ic_schedule_apply(sh_iface *iface, const sh_apply_item *items, int n,
 }
 /* +0x290 SYNCHRONOUS inline apply (OG-faithful): commit NOW on this (console-drain / UI) thread. Returns
  * the applied count (>=0), or -1 if the slot is absent (an older backend -> the caller falls back to the
- * deferred schedule). Mirrors src/ui/snapstack.cpp's iface_apply_sync exactly. */
+ * deferred schedule). */
 static int ic_apply_sync(sh_iface *iface, const sh_apply_item *items, int n, const char *op)
 {
     if (!iface || !iface->vtbl || !iface->vtbl->apply_sync) return -1;
@@ -298,7 +298,7 @@ static int ic_apply_sync(sh_iface *iface, const sh_apply_item *items, int n, con
  * acctargets) go through this -- see the module doc comment for why (the deferred path double-frees the
  * decl-source block on the next map teardown; this is the exact bug the first port attempt carried).
  * mkcmd (kind=1, prefab paste) intentionally stays on ic_schedule_apply -- a different operation that
- * targets the editor paste slot, matching Qt's own convention. */
+ * targets the editor paste slot, matching the original's convention. */
 static int ic_apply(sh_iface *iface, const sh_apply_item *items, int n, const char *op)
 {
     if (n <= 0) return 0;
@@ -474,7 +474,7 @@ static void h_pop2g(void *ctx, int argc, const char **argv)
 
 /* filtinh / filtcls shared body (0x3c70 / 0x3c78): KEEP only stack[N] ids whose inherit/classname ==
  * match; re-push the survivors; toast the count. filtcls toast is labeled "had class" (the OG mislabel
- * on filtcls -- reusing filtinh's "had inherit" string -- is fixed here, matching Qt). */
+ * on filtcls -- reusing filtinh's "had inherit" string -- is fixed here). */
 static void do_filt(sh_iface *iface, int index, const char *match, int by_class)
 {
     int *cur = NULL;
@@ -527,8 +527,8 @@ static long sh_c_atoi(const char *s)
 static double sh_c_atof(const char *s) { return s ? atof(s) : 0.0; }
 
 /* renderEngineFloat: the ENGINE-FORMAT float token -- the shortest round-trip decimal, keeping a
- * trailing ".0" on whole floats and switching to scientific notation at exp<-4 or exp>=16 (matches Qt's
- * own render_engine_float byte-for-byte; ported to fixed buffers, no std::string). */
+ * trailing ".0" on whole floats and switching to scientific notation at exp<-4 or exp>=16 (byte-for-byte
+ * the engine's own float text; uses fixed buffers, no dynamic strings). */
 static void sh_shortest_digits(double f, char *digits, int digits_cap, int *out_exp, int *out_neg)
 {
     *out_neg = (f < 0.0) || (f == 0.0 && signbit(f));
@@ -670,8 +670,8 @@ static void h_bsi(void *ctx, int argc, const char **argv) { do_bulkset((sh_iface
 static void h_bsf(void *ctx, int argc, const char **argv) { do_bulkset((sh_iface *)ctx, "bsf", argc, argv); }
 
 /* bsb: bulk-set BOOL. A serialize/patch mismatch is a real signal (a property/value that didn't
- * round-trip) -- surfaced via a clean toast (the OG's own leftover debug MessageBoxA is NOT reproduced;
- * matches Qt's already-fixed behavior, not the historical OG bug). */
+ * round-trip) -- surfaced via a clean toast (the OG's own leftover debug MessageBoxA is deliberately
+ * NOT reproduced -- a fix over the historical OG behavior). */
 static void h_bsb(void *ctx, int argc, const char **argv)
 {
     sh_iface *iface = (sh_iface *)ctx;
@@ -766,8 +766,8 @@ static void h_bse(void *ctx, int argc, const char **argv)
 
 /* accl/acctargets shared body (0x2498 / 0x228c): pop LAST id (=RECEIVER); build a num/item[] LIST of ALL
  * remaining ids' id-strings at state.edit.<path>; apply on the POPPED id. acctargets HARDCODES path
- * "targets". >=2 ids, STACK-ONLY. Drops stale/deleted ids from the list (exceeds OG -- see Qt's own
- * comment on why: a dangling id-string is never a valid target). */
+ * "targets". >=2 ids, STACK-ONLY. Drops stale/deleted ids from the list (exceeds OG: a dangling
+ * id-string is never a valid target). */
 static void do_acc(sh_iface *iface, const char *op, int argc, const char **argv, int hardcoded_targets)
 {
     const char *userPath = arg_at(argc, argv, 2);
@@ -839,7 +839,7 @@ static void do_acc(sh_iface *iface, const char *op, int argc, const char **argv,
 
     /* success toast: how many targets/refs + WHICH receiver got them. The backend's generic "applied N/N
      * (engine round-trip)" toast is SUPPRESSED for accl/acctargets in ae_toast_result (apply_engine.c), so
-     * without this the op succeeds SILENTLY -- matches Qt's do_acc, which emits this receiver toast instead. */
+     * without this the op would succeed SILENTLY -- this receiver toast is emitted instead. */
     {
         char rcv[256]; ic_id_string(iface, popped, rcv, (int)sizeof rcv);
         char t[160];
@@ -904,7 +904,7 @@ static void h_mkcmd(void *ctx, int argc, const char **argv)
 
     /* mkcmd (kind=1, prefab paste) intentionally stays on the DEFERRED path -- it targets the editor paste
      * slot, a different operation from the kind=0 decl-edits, and never exhibited the double-free crash
-     * (matches Qt's own snapstack.cpp convention; see the module doc comment for the kind=0 rationale). */
+     * (matches the original's convention; see the module doc comment for the kind=0 rationale). */
     sh_apply_item it; it.kind = 1; it.id = 0; it.text = prefab;
     int ok = ic_schedule_apply(iface, &it, 1, "mkcmd");
     free(prefab);
@@ -995,7 +995,7 @@ static void h_bsincls(void *ctx, int argc, const char **argv)
             do_set_inherit_one(iface, ids[i], inh, 0);
             do_set_classname_one(iface, ids[i], cls);
         }
-        /* r==0: the FINAL pair is a fatal combo -> leave unchanged, skip the rebuild (matches Qt). */
+        /* r==0: the FINAL pair is a fatal combo -> leave unchanged, skip the rebuild. */
     }
     free(ids);
     char text[200];
@@ -1004,12 +1004,10 @@ static void h_bsincls(void *ctx, int argc, const char **argv)
 }
 
 /* ============================================================ store inspection / management =========
- * chkstk / chkgrp / clrgrp -- NEW backend-exclusive SnapStack+ commands (NOT part of OG's 20). They read
- * and manage the SAME file-static stores (g_stacks / g_groups) every op above mutates, so they report the
- * true live state under the webview build (where all SnapStack ops run these backend handlers). Under a Qt
- * build the ops run Qt's OWN in-process stores (snapstack.cpp), so these would read the backend's separate
- * (empty) copy -- a known store-duplication limitation the eventual Qt-retirement (Phase 2) resolves. All
- * output goes to the console (sh_printf) with a summary toast, mirroring snapstack_diag. */
+ * chkstk / chkgrp / clrgrp -- NEW SnapStack+ commands (NOT part of OG's 20). They read and manage the
+ * SAME file-static stores (g_stacks / g_groups) every op above mutates, so they always report the true
+ * live state (all SnapStack ops run these backend handlers). All output goes to the console (sh_printf)
+ * with a summary toast, mirroring snapstack_diag. */
 
 /* chkstk [N]: N given -> list stack N's ids + count; omitted -> summarize every non-empty stack. */
 static void h_chkstk(void *ctx, int argc, const char **argv)
@@ -1139,23 +1137,22 @@ static const sh_subcommand SNAPSTACK_COMMANDS[] = {
     { "bsin",       h_bsin },
     { "bscls",      h_bscls },
     { "bsincls",    h_bsincls },
-    /* NEW backend-exclusive SnapStack+ store-management commands (NOT among OG's 20; Qt never defines these
-     * names, so no overwrite race -- they always run this backend's copy against the live backend stores). */
+    /* NEW SnapStack+ store-management commands (NOT among OG's 20) -- they run this module's handlers
+     * against the live backend stores. */
     { "chkstk",     h_chkstk },
     { "chkgrp",     h_chkgrp },
     { "clrgrp",     h_clrgrp },
-    /* diagnostic-only: not one of the 20 OG-faithful subcommands, backend-exclusive (Qt never defines
-     * this name, so there's no overwrite race for it -- it always reports on whatever's ACTUALLY live). */
+    /* diagnostic-only: not one of the 20 OG-faithful subcommands -- it reports on whatever's
+     * ACTUALLY live in the shared cmd-map. */
     { "snapstack_diag", h_snapstack_diag },
 };
 #define SNAPSTACK_COMMAND_COUNT ((int)(sizeof(SNAPSTACK_COMMANDS) / sizeof(SNAPSTACK_COMMANDS[0])))
 
 /* sh snapstack_diag: for each registered subcommand name (including itself), report which ACTUAL DLL
  * module currently owns the handler in the shared cmd-map (resolved via the handler's own code address
- * -- correct regardless of which frontend, if any, loaded, and regardless of whether it registered its
- * own copy over the backend's). Answers "is Qt's or the webview backend's copy of `sh psel` active right
- * now?" without guessing -- console output (sh_printf), a persisted one-line summary (backend_log), and
- * a toast (visible without opening the console history). */
+ * -- correct regardless of which module registered the name, or last re-registered it). Answers "whose
+ * copy of `sh psel` is active right now?" without guessing -- console output (sh_printf), a persisted
+ * one-line summary (backend_log), and a toast (visible without opening the console history). */
 static void h_snapstack_diag(void *ctx, int argc, const char **argv)
 {
     (void)argc; (void)argv;

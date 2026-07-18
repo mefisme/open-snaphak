@@ -150,7 +150,7 @@ typedef int          (*sh_enum_valid_classes_fn)(struct sh_iface *self, const ch
  * LIVE entityDef decl manager (every loaded entityDef is a valid inherit -- NOT gated by placeable/path) and
  * packs the decl paths into out_buf as consecutive NUL-terminated strings (double-NUL end -- SAME packed ABI
  * as +0x270). Returns 1 + *out_count on success, 0 if the manager is unreachable (the frontend then falls back
- * to its static list). A raw decl-array read -> thread-safe on the Qt UI thread. Replaces the frozen 272-entry
+ * to its static list). A raw decl-array read -> thread-safe on the UI thread. Replaces the frozen 272-entry
  * static inherit list with the engine's full ~2,500. */
 typedef int          (*sh_enum_inherits_fn)(struct sh_iface *self,
                                             char *out_buf, int cap, int *out_count);               /* +0x278 (ext 2) */
@@ -161,7 +161,7 @@ typedef int          (*sh_enum_inherits_fn)(struct sh_iface *self,
  * engine's own pick/visibility gate). This slot returns 1 iff the entity is currently HIDDEN by that gate
  * (cvar off AND the entity is not in the base layer) -- the Entities + Timelines lists skip those, so they
  * match what the editor shows. Returns 0 when the cvar is on, a read faults, or the editor is down
- * (fail-safe: never hide on uncertainty). A raw layer-bit read -> thread-safe on the Qt UI thread. */
+ * (fail-safe: never hide on uncertainty). A raw layer-bit read -> thread-safe on the UI thread. */
 typedef int          (*sh_id_dev_layer_hidden_fn)(struct sh_iface *self, int id);                /* +0x280 (ext 3) */
 typedef int          (*sh_wire_edit_generation_fn)(struct sh_iface *self);                       /* +0x288 (ext 4) */
 
@@ -179,7 +179,7 @@ typedef int          (*sh_apply_sync_fn)(struct sh_iface *self, const struct sh_
 /* +0x298 (ext 6) TIMELINE PORTABLE-INHERIT NORMALIZE. A Timeline placed from the in-game SnapMap palette
  * is spawned from a repurposed `snapmaps/editor_only/placeholder_target` entityDef (installed only so a
  * Timeline is selectable in the palette at all -- the clone cannot fabricate a Timeline entity directly;
- * see sh_timeline.cpp's header comment for the create-path history), so the fresh entity records THAT as
+ * see docs/backend-changes.md for the create-path history), so the fresh entity records THAT as
  * its `inherit` -- a saved map would then only reload where our override is installed. This slot: given a
  * live entity id, cheaply checks (a raw defsub-inherit read, no serialize) whether it is still that
  * placeholder; if so, serializes the entity (+0xc8-equivalent), raw-splices the inherit to the portable
@@ -187,19 +187,16 @@ typedef int          (*sh_apply_sync_fn)(struct sh_iface *self, const struct sh_
  * INLINE on the CALLING thread (same guarantee as +0x290 apply_sync -- no deferred double-free risk).
  * `className` is left untouched (idTarget_Timeline stays -- no reclass, no render-node/crash surface).
  * NOTE (2026-07-12): live-testing showed this can commit multiple times in quick succession for the same
- * entity before the placeholder stops re-matching -- confirmed to be a PRE-EXISTING characteristic shared
- * by Qt's original, unmodified sh_timeline_normalize_inherit (same repeated-commit pattern observed in the
- * backend log for both), not something this port introduced; harmless in Qt. Ported 2026-07-13 from the
- * Qt-only sh_timeline_normalize_inherit so both frontends share ONE implementation instead of Qt carrying
- * logic WebView silently lacked. */
+ * entity before the placeholder stops re-matching -- confirmed to be a PRE-EXISTING characteristic of the
+ * normalize mechanism itself (the same repeated-commit pattern was observed in the backend log before this
+ * backend hosting), not something the move introduced; harmless (the commits converge). Hosted in the
+ * backend since 2026-07-13 as the ONE shared implementation. */
 typedef int          (*sh_normalize_timeline_inherit_fn)(struct sh_iface *self, int id);          /* +0x298 (ext 6) */
 
 /* +0x2A0 (ext 7) push `ids` onto the BACKEND-owned SnapStack numbered stack `index` (dedup-on-push,
- * same semantics as `sh psel`/`sh phov`). Lets a frontend running OUT OF PROCESS from the backend's own
- * snapstack.c (i.e. the webview host, which never links snapstack.c directly) reach the SAME stack a
- * `sh <subcommand>` console command typed afterward will see -- mirrors the Qt frontend's Entities-tab
- * "Push to stack 0" context-menu action, which reaches its own in-process g_stacks directly (src/ui/
- * snapstack.cpp's sh_snapstack_push_ids) and has no need of this slot. (NOTE: an EARLIER port attempt used
+ * same semantics as `sh psel`/`sh phov`). Lets the frontend (the webview host, which never links
+ * snapstack.c directly) reach the SAME stack a `sh <subcommand>` console command typed afterward will
+ * see -- backs the Entities-tab "Push to stack 0" context-menu action. (NOTE: an EARLIER port attempt used
  * +0x290 for this slot; that offset was reassigned to apply_sync after that attempt was reset out -- this
  * is a fresh ext slot, +0x2A0, not a reuse.) */
 typedef void          (*sh_push_to_stack_fn)(struct sh_iface *self, int index, const int *ids, int count); /* +0x2A0 (ext 7) */
@@ -216,15 +213,15 @@ typedef int           (*sh_clear_stack_fn)(struct sh_iface *self, int index);   
  * The heavy serialize/deserialize/apply slots the SnapStack APPLY-ops (bss/bsi/bsf/bsb/bse/accl/
  * acctargets/mkcmd) need. These are the native port of the reference implementation's +0xc8 serialize / +0xd0 deserialize-
  * apply / +0xb8 mkcmd-submit. ALL are BACKEND-OWNED (the backend resolves the engine fns by signature +
- * SEH-guards every body); the FRONTEND (Qt) calls them through the vtable at the pinned offsets, doing
- * ONLY the JSON patch in between (QJson for structure + a raw-token splice for the float leaf -- the reference implementation
+ * SEH-guards every body); the FRONTEND calls them through the vtable at the pinned offsets, doing
+ * ONLY the JSON patch in between (a structural edit + a raw-token splice for the float leaf -- the reference implementation
  * patchFullJsonEdit). The HEAVY structured-deserialize is AV-prone mid-frame (a stale reflection-handler),
  * so the apply does NOT run inline: the frontend SCHEDULEs it (sh_schedule_apply) and the backend drains
  * it at the engine command-buffer exec point (clone_bss_apply -- the reference implementation FIX B). */
 
 /* +0xc8 serialize entity id -> the FULL ~type/|pointer idSnapEntity JSON (the reference implementation serializeEntityToJson).
  * Writes up to cap-1 bytes into out_json (NUL-terminated); returns the byte length written (0 on failure /
- * no map / unbound). The frontend QJson-patches this string, then schedules the apply on the patched text. */
+ * no map / unbound). The frontend patches this string, then schedules the apply on the patched text. */
 typedef int          (*sh_serialize_entity_fn)(struct sh_iface *self, int id, char *out_json, int cap); /* +0xc8 */
 
 /* A scheduled apply work-item the backend stashes + drains at the clone_bss_apply command-exec point.
@@ -351,7 +348,7 @@ typedef struct sh_iface_vtbl {
     void *input_state_a;            /* +0x1b0 (0x7e50) */
     sh_toast_fn toast;              /* +0x1b8 (0x7e70) TOAST/notification(label,text) (C2-LIVE) */
     sh_is_entity_mode_fn is_entity_mode;  /* +0x1c0 (0x7f30) 1 when tabbed IN a module (editor+0x23618==2);
-                                           * the Create-New-Timeline gate + Qt button gray-out. */
+                                           * the Create-New-Timeline gate + button gray-out. */
     void *is_module_mode;           /* +0x1c8 (0x7f50) */
     void *is_entering_entity_mode;  /* +0x1d0 (0x7f70) */
     void *declmgr_lookup_void;      /* +0x1d8 (0x7f90) */
@@ -485,7 +482,7 @@ typedef struct sh_iface_engine_slots {
     sh_clear_selection_fn   clear_selection;     /* +0x148 */
     sh_get_selection_fn     get_selection;       /* +0x150 */
     sh_hovered_id_fn        hovered_id;          /* +0x198 */
-    sh_is_entity_mode_fn    is_entity_mode;      /* +0x1c0 (Create-New-Timeline gate / Qt gray-out) */
+    sh_is_entity_mode_fn    is_entity_mode;      /* +0x1c0 (Create-New-Timeline gate / button gray-out) */
     sh_toast_fn             toast;               /* +0x1b8 */
     /* the heavy serialize / schedule-apply / prefab-readback slots (iface_engine.c fills the
      * bodies once the full apply-chain engine fns are signature-resolved). */

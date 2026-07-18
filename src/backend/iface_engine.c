@@ -205,8 +205,8 @@ static const uint8_t *editor_session(void)
     return g_editor;
 }
 
-/* +0x88 editor-ready poll: 1 in the live editor, 0 in the HUB/menu. The OG gates the Qt window's visibility +
- * the per-frame dispatch on this -- the SnapHak Studio window opens on editor-entry and HIDES on exit.
+/* +0x88 editor-ready poll: 1 in the live editor, 0 in the HUB/menu. The OG gates its own (Qt) window's
+ * visibility + the per-frame dispatch on this -- the SnapHak Studio window opens on editor-entry and HIDES on exit.
  * NB: this must NOT use editor_session() (the loaded-map ptr +0x204c8) -- that ptr PERSISTS as a stale value
  * in the HUB after a map was loaded, so it false-positives there (the window stayed up on exit). The editor
  * SCREEN object (+0x21088, the Toast target) goes NULL on editor->HUB exit -- the reliable editor-vs-HUB
@@ -224,7 +224,7 @@ static int slot_editor_ready(sh_iface *self)
 
 /* +0x1c0 IS-ENTITY-MODE: 1 when the player is TABBED INSIDE a module (EntityMode, editor+0x23618==2), else 0
  * (top-level ModuleMode is ==1). The Create-New-Timeline gate -- the feature may only spawn/morph a timeline
- * host while in a module; the Qt button grays out otherwise. OG XINPUT1_3 FUN_180007f30. Uses editor_session()
+ * host while in a module; the button grays out otherwise. OG XINPUT1_3 FUN_180007f30. Uses editor_session()
  * (= g_editor with the map-loaded guard) so it cleanly returns 0 in the HUB / off-editor / on a fault. */
 static int slot_is_entity_mode(sh_iface *self)
 {
@@ -816,7 +816,7 @@ static int vcm_pack(char *out_buf, int cap, int *pw, const char *s)
     return 1;
 }
 
-/* ---- local derive-from-Y over the walked type records. The Qt UI thread (where these dropdowns run) cannot
+/* ---- local derive-from-Y over the walked type records. The frontend's UI thread (where these dropdowns run) cannot
  * call the engine's reflect-based derive check, so we sort the LIVE registry records by name once and chain
  * each candidate's super up the tree by bsearch -- all raw reads, thread-safe. ---- */
 static int ec_rec_cmp(const void *a, const void *b)
@@ -860,7 +860,7 @@ static int ec_fallback_valid_classes(const char *inherit, char *out_buf, int cap
  * unresolvable inherit -> "idEntity" (the universal entity set -- the engine accepts a class-only entity, so
  * an empty inherit admits any idEntity class, per our RE of the engine). Then walks the LIVE
  * reflection type registry and packs every className that == Y or derives from Y. COMPLETE + THREAD-SAFE: the
- * walk roots the type array via the container global on the Qt UI thread (reflect is null there), and
+ * walk roots the type array via the container global on the UI thread (reflect is null there), and
  * derive-from-Y chains LOCALLY via each record's super -- NO reflect-based engine call. Fallback: if the live
  * registry is unreachable, the static valid_class_map corpus snapshot. (Replaces the old SH_CLASS_UNIVERSE(412)
  * candidates + live derive-check, which returned null off the game thread -> fell back to the 70-group map.) */
@@ -952,7 +952,7 @@ static int slot_resolve_prefab_path(sh_iface *self, const char *prefix, const ch
 }
 
 /* Lazily resolve + cache the snapEdit_enableDevLayer idCVar* by walking the cvarSys FULL list by name. Pure
- * memory reads + strcmp -> thread-safe on the Qt UI thread. Returns NULL if unreachable (caller fail-safes to
+ * memory reads + strcmp -> thread-safe on the UI thread. Returns NULL if unreachable (caller fail-safes to
  * "not hidden"). cvarSys via the documented RVA fallback off the cached module base. */
 static void *resolve_devlayer_cvar(void)
 {
@@ -1007,19 +1007,18 @@ static int slot_id_dev_layer_hidden(sh_iface *self, int id)
  * labels auto-settle after a wire (via the wire_rebuild_frames re-scan window). */
 static int slot_wire_edit_generation(sh_iface *self) { (void)self; return sh_wiring_cleandirect_generation(); }
 
-/* +0x2A0 ext 7: push `ids` onto the backend-owned SnapStack stack `index` (dedup-on-push). Lets an
- * out-of-process frontend (the webview host) reach the SAME stack a `sh <subcommand>` console command
- * typed afterward will see -- the Qt frontend has no need of this (its own Entities-tab "Push to stack
- * 0" reaches its in-process g_stacks directly via sh_snapstack_push_ids in snapstack.cpp). */
+/* +0x2A0 ext 7: push `ids` onto the backend-owned SnapStack stack `index` (dedup-on-push). Lets the
+ * frontend (the webview host, which never links snapstack.c directly) reach the SAME stack a
+ * `sh <subcommand>` console command typed afterward will see. */
 static void slot_push_to_stack(sh_iface *self, int index, const int *ids, int count)
 {
     (void)self;
     sh_snapstack_push_ids_backend(index, ids, count);
 }
 
-/* +0x2A8 ext 8: empty the backend-owned SnapStack stack `index` -- the out-of-process counterpart to
+/* +0x2A8 ext 8: empty the backend-owned SnapStack stack `index` -- the counterpart to
  * slot_push_to_stack above, lets the webview host's "Clear stack 0" context-menu action reach the same
- * stack without needing the DOOM console. Qt has no need of this either, for the same reason as push. */
+ * stack without needing the DOOM console. */
 static int slot_clear_stack(sh_iface *self, int index)
 {
     (void)self;
@@ -1067,7 +1066,7 @@ int sh_iface_engine_install(const sig_result *results, size_t n, const uint8_t *
     slots.clear_selection    = slot_clear_selection;
     slots.get_selection      = slot_get_selection;
     slots.hovered_id         = slot_hovered_id;
-    slots.is_entity_mode     = slot_is_entity_mode;          /* +0x1c0 (Create-New-Timeline gate / Qt gray-out) */
+    slots.is_entity_mode     = slot_is_entity_mode;          /* +0x1c0 (Create-New-Timeline gate / button gray-out) */
     slots.toast              = slot_toast;
     /* the DATA-tab slots (Entity-State read/write + Prefabs path + Delete). */
     slots.get_declsource_copy    = slot_get_declsource;       /* +0x30  */

@@ -310,13 +310,13 @@ const char *sh_typeinfo_inherit_base(const char *inheritName, char *buf, size_t 
 #define REGISTRY_SUPER_OFF      0x08      /* record -> superclass name char* ("" for a root) */
 #define REGISTRY_WALK_CAP       65536u    /* stale/garbage-array guard (this build has ~10,190 records) */
 #define TYPE_CONTAINER_RVA      0x3082b10u /* the reflection container object P (reflect+0 holds &this). Used as
-                                           * the thread-safe fallback when reflect is null (the Qt UI thread):
+                                           * the thread-safe fallback when reflect is null (the UI thread):
                                            * P is a fixed static global, so B=*(P+0x20) is a pure raw read.
                                            * BUILD-SPECIFIC -- re-derive per build: it's *(reflect+0) on the
                                            * game thread, per our RE of the reflection registry). */
 
 /* Root B = the type-record array base, THREAD-SAFELY. Primary (portable): reflect (game thread) -> P=*(reflect).
- * Fallback (Qt UI thread, where the reflect vtable accessor returns null): the container global P=base+0x3082b10
+ * Fallback (the UI thread, where the reflect vtable accessor returns null): the container global P=base+0x3082b10
  * (a fixed static object -- raw read, no vtable call). Either way B=*(P+0x20). NULL only if neither roots. */
 static const uint8_t *ti_type_array_base(void)
 {
@@ -375,7 +375,7 @@ int sh_typeinfo_collect_records(sh_ti_record *out, int cap)
 /* Enumerate the LIVE entityDef decl manager (the valid-INHERIT set). The mgr @ RESOURCE_MGR_CTX_RVA (0x59BD8F0
  * -- the SAME ctx sh_typeinfo_inherit_base uses) is a flat array: count @ mgr+0x28, array @ mgr+0x20, each
  * element an idDeclEntityDef* whose name (the decl PATH) is the generic idDecl name slot @ decl+0x08. Pure raw
- * reads -> thread-safe on the Qt UI thread. */
+ * reads -> thread-safe on the UI thread. */
 #define ENTITYDEF_MGR_ARRAY_OFF  0x20
 #define ENTITYDEF_MGR_COUNT_OFF  0x28
 #define DECL_NAME_OFF            0x08

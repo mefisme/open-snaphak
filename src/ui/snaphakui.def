@@ -1,4 +1,4 @@
-; snaphakui.def -- the export surface of the clean-room snaphakui.dll (the Qt "SnapHak Studio" frontend).
+; snaphakui.def -- the export surface of the clean-room snaphakui.dll (the WebView2 "SnapHak Studio" frontend).
 ;
 ; FAITHFUL to the OG snaphakui.dll exports: snaphak_ui_init (ord 10, the CreateThread entry the backend
 ; spine targets) + the 9 sl_* SuperScript-Lua bindings. NOT a proxy DLL --
@@ -6,7 +6,7 @@
 ; System32 forwarding thunks. It exports ONLY its init + the sl_* surface.
 ;
 ; snaphak_ui_init is pinned to ordinal 10 (the OG ord). The sl_* names are undecorated C (the SuperScript
-; ABI is by-name C). All bodies are the __declspec(dllexport) functions in snaphak_ui_init.cpp / sl_exports.cpp;
+; ABI is by-name C). All bodies are the __declspec(dllexport) functions in webview/snaphak_ui_webview.cpp / sl_exports.cpp;
 ; this .def fixes the OG ordinal + name set. (A .def co-existing with __declspec(dllexport) is fine -- the
 ; linker unions them; the .def pins the ordinal that dllexport alone would auto-assign.)
 LIBRARY snaphakui

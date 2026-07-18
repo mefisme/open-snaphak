@@ -66,7 +66,7 @@ static char g_crashstk[512];
 /* ---- FIRST-CHANCE CRASH LOGGER (crash-forensics: name a death the recovery paths never touch) --------
  * The recovery logic below only ACTS on AVs/HW-faults whose rip is INSIDE DOOM; it CONTINUE_SEARCHes every
  * other first-chance exception -- a crash-class fault in a NON-DOOM module (the SnapHak UI DLL, a backend
- * detour, Qt) or a fastfail/heap-stop -- so those deaths left NO shield trace and an attached debugger saw
+ * detour, a system/runtime DLL) or a fastfail/heap-stop -- so those deaths left NO shield trace and an attached debugger saw
  * only a bare process-terminated. This LOG-ONLY block records ANY crash-class first-chance exception in ANY
  * module (code + name + rip + module+offset + fault addr), rate-limited + immediate-flush, then falls through
  * so the recovery logic runs UNCHANGED (it never alters the exception disposition). */

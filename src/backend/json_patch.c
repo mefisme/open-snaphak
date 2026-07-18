@@ -361,8 +361,8 @@ static int json_walk_set(const char *doc, size_t doclen, const char *obj_open,
 
     {
         /* segs[idx] is missing, OR it exists but its value is NOT an object (e.g. `"edit":null` /
-         * `"edit":""` on an edit-less entity -- the engine serializes an empty edit that way, and QJson
-         * laundered it into `{}` on the Qt path). Build the remaining path segs[idx+1..] as a BRACED
+         * `"edit":""` on an edit-less entity -- the engine serializes an empty edit that way).
+         * Build the remaining path segs[idx+1..] as a BRACED
          * OBJECT VALUE `{"segs[idx+1]":{...:leaf}}` -- NOT the bare `"key":value` member json_build_
          * scalar_chain returns, which when spliced as segs[idx]'s value produced the invalid
          * `"edit":"renderModelInfo":{...}` the engine lexer rejected (live-found: bss/acctargets

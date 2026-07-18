@@ -1,22 +1,16 @@
-/* snapstack.h -- BACKEND-hosted port of src/ui/snapstack.cpp: the SnapStack stores (stack-of-stacks +
+/* snapstack.h -- the BACKEND-hosted SnapStack implementation: the stores (stack-of-stacks +
  * named groups) and the 20 `sh <subcommand>` console handlers, in pure C.
  *
- * This is ADDITIVE, not a replacement: src/ui/snapstack.cpp (Qt) is untouched. Both copies register the
- * SAME 20 command names on the SAME shared sh_iface cmd-map; whichever registers LAST wins (the cmd-map
- * overwrites on duplicate name -- see snaphak_iface.c's iface_register_cmd). This module registers from
- * ui_bridge.c right after the interface object is created (before any frontend loads), and Qt's own
- * unchanged registrar (snaphak_ui_init.cpp -> snapstack.cpp) still runs after and overwrites these with
- * Qt's own handlers -- so a Qt build's *behavior* is unaffected; only a frontend that never registers
- * its own copy (the webview host) ends up actually running this module's handlers.
+ * This module is the SOLE SnapStack implementation. It registers the 20 command names on the shared
+ * sh_iface cmd-map (which overwrites on duplicate name -- see snaphak_iface.c's iface_register_cmd)
+ * from ui_bridge.c right after the interface object is created, before the frontend loads -- so every
+ * `sh <subcommand>` runs this module's handlers. The frontend never registers a copy of its own.
  *
- * Stores are file-static singletons here (mirrors Qt's own g_stacks/g_groups singleton pattern) -- a
- * SEPARATE instance from Qt's, since they live in different DLLs/address spaces when Qt IS running (Qt's
- * copy is compiled into snaphakui.dll; this copy is compiled into XINPUT1_3.dll). That's fine: only one
- * of the two copies of any given command is ever the ACTIVE one at a time (whichever registered last),
- * so only one store is ever actually read/written in a given session.
+ * Stores are file-static singletons here (one stack-of-stacks + one group map), compiled into
+ * XINPUT1_3.dll alongside everything else that touches them.
  *
- * Clean-room: ported from our own RE (src/ui/snapstack.cpp, itself clean-room) + the JSON structural
- * work now lives in json_patch.c instead of QJsonObject. Zero OG SnapHak bytes.
+ * Clean-room: ported from our own RE; the JSON structural work lives in json_patch.c. Zero OG
+ * SnapHak bytes.
  */
 #ifndef BACKEND_SNAPSTACK_H
 #define BACKEND_SNAPSTACK_H
@@ -24,8 +18,8 @@
 #include "snaphak_iface.h"
 
 /* Register the 20 SnapStack subcommands PLUS `snapstack_diag` (a backend-exclusive diagnostic -- see
- * snapstack.c) on the interface's cmd-map (+0x188). Safe to call once, early (before any frontend loads)
- * -- ctx = iface for every handler, matching the Qt registrar's convention. */
+ * snapstack.c) on the interface's cmd-map (+0x188). Safe to call once, early (before the frontend loads)
+ * -- ctx = iface for every handler. */
 void sh_register_snapstack_commands_backend(sh_iface *iface);
 
 /* The Entities-tab "Push to stack 0" context-menu action, exposed for the push_to_stack vtable slot

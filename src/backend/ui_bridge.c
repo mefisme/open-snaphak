@@ -36,8 +36,8 @@ static sh_iface *g_iface = NULL;
 static sh_ui_argblock g_argblock;
 static void          *g_ui_out_slot = NULL;   /* receives the frontend's loop-state obj address */
 
-/* A synthetic argv for QApplication (the OG passes DOOM's own argv; we hand a minimal stable argv so the
- * Qt app constructs cleanly -- the frontend also has its own fallback). Static => stable for QApp's life. */
+/* A synthetic argv for the pinned arg-block layout (the OG passes DOOM's own argv to its frontend; we
+ * hand a minimal stable one). Static => stable for the frontend thread's life. */
 static char  g_argv0[] = "snaphak";
 static char *g_argv[]  = { g_argv0, NULL };
 
@@ -71,14 +71,12 @@ int sh_ui_bridge_install(void)
         return 0;
     }
 
-    /* 1.5) Register the 20 SnapStack subcommands (snapstack.c) here in the backend, once, before any
-     *    frontend loads. This is now the SOLE registration, shared by BOTH the Qt and webview frontends:
-     *    the Qt-only registrar that used to live in snaphak_ui_init.cpp -> src/ui/snapstack.cpp was RETIRED,
-     *    so no frontend re-registers/overwrites these anymore. `sh psel`/`sh acctargets`/etc. resolve to
-     *    this module's handlers on both builds, against ONE shared store. Run `sh snapstack_diag` in-game
-     *    to see, per command, which DLL owns it (this backend, on both builds). */
+    /* 1.5) Register the 20 SnapStack subcommands (snapstack.c) here in the backend, once, before the
+     *    frontend loads. This is the SOLE registration -- the frontend never re-registers/overwrites
+     *    these, so `sh psel`/`sh acctargets`/etc. always resolve to this module's handlers, against ONE
+     *    shared store. Run `sh snapstack_diag` in-game to see, per command, which DLL owns it. */
     sh_register_snapstack_commands_backend(g_iface);
-    backend_log("C0: backend SnapStack commands registered (sole owner, both frontends) -- `sh snapstack_diag` to verify");
+    backend_log("C0: backend SnapStack commands registered (sole owner) -- `sh snapstack_diag` to verify");
 
     /* 2) Fill the matched-pair arg block: [0]=out-slot, [1]=argc, [2]=argv, [3]=interface. */
     g_argblock.out_slot = &g_ui_out_slot;
@@ -86,9 +84,9 @@ int sh_ui_bridge_install(void)
     g_argblock.argv     = g_argv;
     g_argblock.iface    = g_iface;
 
-    /* 3) Load the frontend exactly as OG does (relative to the DOOM cwd's snaphak\ overlay). SetDllDirectory
-     *    so snaphakui's Qt5*.dll resolve from .\snaphak\ (OG SetDllDirectoryA); the Qt platform plugin
-     *    (qwindows.dll) loads separately from .\platforms\ via Qt's app-exe-dir search. */
+    /* 3) Load the frontend exactly as OG does (relative to the DOOM cwd's snaphak\ overlay).
+     *    SetDllDirectoryA(".\snaphak\") matches the OG's own call -- kept for parity, and it puts
+     *    .\snaphak\ on the search path for any DLL dependency snaphakui.dll may resolve at load. */
     SetDllDirectoryA(".\\snaphak\\");
     g_snaphakui = LoadLibraryA(".\\snaphak\\snaphakui.dll");
     if (!g_snaphakui) {

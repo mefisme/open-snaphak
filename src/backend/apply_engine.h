@@ -11,7 +11,8 @@
  * allocated at its REAL size + constructed with the engine ctor (an allocation-size freeze lesson); the teardown
  * order is faithful to FUN_180004950 (FIX A) and deliberately does NOT call the OG raw lexer-buffer free.
  *
- * The frontend (Qt) does the JSON patch between serialize + apply; this backend owns the engine touch.
+ * The caller (the frontend, or the backend's own SnapStack handlers via json_patch.c) does the JSON
+ * patch between serialize + apply; this backend owns the engine touch.
  * The three vtable slots (serialize_entity +0xc8 / apply_edit +0xd0 / read_prefab +0xb8) are exported via
  * sh_apply_engine_slots() so sh_iface_engine can fold them into the single sh_iface_bind_engine_slots call.
  *

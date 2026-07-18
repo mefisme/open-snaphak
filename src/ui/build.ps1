@@ -8,7 +8,7 @@
 #      build\webview2sdk (gitignored) if not already there. NO binaries land in the repo.
 #   3. generate build\obj\uiwv\mockup_html.h from webview\mockup.html (the UI, embedded in the DLL).
 #   4. cl-compile webview\snaphak_ui_webview.cpp + sl_exports.cpp -> build\snaphakui.dll, statically
-#      linking WebView2LoaderStatic.lib (no WebView2Loader.dll to ship) and NO Qt.
+#      linking WebView2LoaderStatic.lib (no WebView2Loader.dll to ship).
 #
 # Usage:  invoked by the repo-root build.ps1; or directly: pwsh -File src\ui\build.ps1 (backend not rebuilt)
 #
@@ -97,7 +97,7 @@ Write-Host "generated $hdrPath ($([Math]::Round(($html.Length/1KB),1)) KB of HTM
 # /MD (dynamic CRT: the WebView2 static loader + the process's existing MSVCP140/VCRUNTIME140 expect it),
 # /EHsc /std:c++17. Includes: WebView2 headers, the generated header dir, the shared iface ABI dir.
 # Sources: the WebView2 host + the unchanged sl_* export stubs. Links the static WebView2 loader + the
-# Win32 libs its COM/shell calls need. NO Qt. /DEF pins the OG export set (snaphak_ui_init @10 + sl_*).
+# Win32 libs its COM/shell calls need. /DEF pins the OG export set (snaphak_ui_init @10 + sl_*).
 $incArgs = @(
     "/I`"$wvInclude`"",
     "/I`"$objDir`"",
@@ -111,9 +111,7 @@ $libArgs = @(
 ) -join " "
 $implib = $Out -replace '\.dll$', '.lib'
 
-# Output -> build\webview\ (its OWN subfolder, distinct from build\qt\ -- both frontends build a file
-# literally named snaphakui.dll; without separate folders, building one after the other would silently
-# overwrite the other in build\. The backend, XINPUT1_3.dll, has no per-frontend variant and stays
+# Output -> build\webview\ (the frontend's own subfolder; the backend, XINPUT1_3.dll, stays
 # directly in build\.)
 New-Item -ItemType Directory -Force (Join-Path $build "webview") | Out-Null
 $cl  = "cl /nologo /LD /O2 /W3 /EHsc /std:c++17 /MD /DWIN32 /D_WINDOWS /Fo..\..\build\obj\uiwv\ " +

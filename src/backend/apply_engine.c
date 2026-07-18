@@ -823,9 +823,9 @@ static void ae_toast_result(const char *op, int applied, int total)
                 op[0] ? op : "apply", applied, total);
     /* Load/Place already shows its own actionable toast ("staged -- press Ctrl+V to place it") the
      * moment it schedules -- this generic "SnapStack: ..." one just duplicates/confuses that with no
-     * new information (it's the same op every Qt sh_apply-style caller shares, hence the fixed
+     * new information (it's the same op every apply-op caller shares, hence the fixed
      * "SnapStack" label, which reads as unrelated to a Prefabs-tab action). Skip it for that op only;
-     * the Qt mkcmd command has no toast of its own, so it still needs this one. */
+     * the mkcmd command has no toast of its own, so it still needs this one. */
     /* quiet the generic "applied N/N" toast for ops that either show their OWN actionable toast or are
      * internal housekeeping the user never triggered:
      *   load-prefab        -> the Prefabs tab already toasts "staged -- press Ctrl+V".
@@ -914,12 +914,10 @@ static int slot_serialize_entity(sh_iface *self, int id, char *out_json, int cap
  * snaphak_iface.h for the why) -- and the portable value it gets normalized to. */
 #define TL_PLACEHOLDER_INHERIT "snapmaps/editor_only/placeholder_target"
 #define TL_PORTABLE_INHERIT    "snapmaps/unknown"
-/* Matches sh_timeline.cpp's own SH_TL_JSON_CAP exactly -- Qt's tl_iface_serialize_entity has used this
- * size (heap via std::string::resize, freed after the call) for the same "full timeline-entity JSON"
- * job all along with no issue. An earlier version of this function used two STATIC 1 MB buffers instead
- * (2 MB of permanently-resident BSS the Qt path never carries) -- confirmed via a controller-freelook
- * regression during live testing to be a real problem, reverted, and redesigned to this transient
- * heap-alloc/free shape specifically to match Qt's already-proven-safe footprint. */
+/* 256 KB -- proven sufficient for the full timeline-entity JSON. An earlier version of this function
+ * used two STATIC 1 MB buffers instead (2 MB of permanently-resident BSS) -- confirmed via a
+ * controller-freelook regression during live testing to be a real problem, reverted, and redesigned to
+ * this transient heap-alloc/free shape (allocated per call, freed before returning). */
 #define TL_NORMALIZE_BUF_CAP   (256 * 1024)
 
 /* Raw string splice (NOT a JSON re-parse, which would drop the engine-required float ".0"): replace every
@@ -952,8 +950,8 @@ static int tl_splice_portable_inherit(const char *src, char *out, int cap)
  * for the malloc+serialize+splice+commit+free. Commits via ae_apply_one directly (the SAME body +0x290
  * apply_sync calls for kind=0) INLINE on the calling thread -- whichever thread that is is, by
  * construction, the caller's own safe commit point (matching the +0x290 guarantee). Both scratch buffers
- * are heap-allocated per call and freed before returning -- no persistent static/BSS footprint, matching
- * Qt's own tl_iface_serialize_entity (std::string::resize, same 256 KB cap, same freed-after-use shape). */
+ * are heap-allocated per call and freed before returning -- no persistent static/BSS footprint (see the
+ * TL_NORMALIZE_BUF_CAP comment above for the regression that shape avoids). */
 static int slot_normalize_timeline_inherit(sh_iface *self, int id)
 {
     (void)self;
@@ -974,9 +972,9 @@ static int slot_normalize_timeline_inherit(sh_iface *self, int id)
          * leave the blob (hence the Inherit box + the saved map) stuck on the placeholder forever. Gating on
          * the blob instead keeps this firing across successive rescans (each triggered by the raw field's
          * id-string change) until a commit's DeclSourceRebuild finally bakes 'unknown' into the blob -- this
-         * is the exact self-correcting behavior Qt's original sh_tabs get_inherit gate relied on (the
+         * self-correcting repeated-commit behavior is what the get_inherit gate has relied on all along (the
          * "repeated commits" seen in the log are load-bearing, not waste). A raw-field gate here was tried
-         * 2026-07-12 and confirmed to leave both frontends stuck on the placeholder. */
+         * 2026-07-12 and confirmed to leave the Inherit box + the saved map stuck on the placeholder. */
         void *blob = NULL;
         if (!ae_read_ptr((const uint8_t *)defsub + DECL_BLOB_OFF, &blob) || !blob) { result = 0; goto done; }
         if (!strstr((const char *)blob, TL_PLACEHOLDER_INHERIT)) { result = 0; goto done; }   /* blob already portable */

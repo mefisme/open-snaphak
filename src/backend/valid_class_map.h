@@ -1,6 +1,6 @@
 /* valid_class_map.h -- inherit -> Y -> valid-classes, the THREAD-SAFE fallback for the dropdown
  * enumerator. The live engine type-lookup (sh_typeinfo_inherit_base / _class_derives) is GAME-THREAD-AFFINE
- * and returns null on the Qt UI thread; the dropdown enumerator runs UI-thread, so when the live lookup
+ * and returns null on the frontend's UI thread; the dropdown enumerator runs UI-thread, so when the live lookup
  * fails it serves from this corpus snapshot instead. GENERATED from the reference entityDef corpus
  * (enumerator/inherit_y.json + valid_class_map.json + hierarchy.json). BUILD-SPECIFIC: regenerate on a DOOM
  * type-hierarchy change (the live apply-guard remains the source of truth; this is a UI hint). DO NOT hand-edit. */

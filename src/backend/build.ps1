@@ -51,8 +51,8 @@ param(
                            "entity.c", "typeinfo.c", "patch.c", "algo.c", "target_any.c", "wiring_cleandirect.c", "ui_bridge.c",
                            "iface_engine.c", "apply_engine.c", "../common/snaphak_iface.c",
                            # backend-hosted SnapStack (snapstack.c + json_patch.c): the `sh psel`/`sh acctargets`/
-                           # etc. console commands + the stores -- the SOLE SnapStack implementation, shared by both
-                           # the Qt and webview frontends (the Qt-side src/ui/snapstack.cpp copy was retired).
+                           # etc. console commands + the stores -- the SOLE SnapStack implementation (the frontend
+                           # never registers its own copy).
                            "snapstack.c", "json_patch.c",
                            # cvar-unlock MERGED in: the former standalone dinput8 cvar-unlock now rides
                            # the backend (one fewer shipped DLL; no System32 dinput8 shadow). dinput8 forwarder
