@@ -744,31 +744,3 @@ issue rather than filing duplicates.
 
 Nothing is sent unless you click Send — Snapmap+ makes no other network requests on its own.
 
-## Privacy policy
-
-Snapmap+ collects nothing automatically. It runs no analytics, telemetry, or tracking, and makes no
-network requests on its own.
-
-The only time anything leaves your computer is when **you** click **Send** in the feedback or crash-report
-dialog. When you do:
-
-- **What's sent:** the category, title, and details you typed, plus the Snapmap+ version — and, for a crash
-  report only if you leave the box checked, recent log text with your Windows account name and machine name
-  stripped out first.
-- **Optional:** a contact handle (email / Discord / GitHub), only if you choose to add one so we can reply.
-- **Where it goes:** to Snapmap+'s feedback relay, which files it as a **public** issue on the project's
-  GitHub tracker. Anything you type can be seen publicly — don't include anything sensitive.
-- **Not collected:** no account, no IP logging or tracking on our side, and no personal data beyond what you
-  optionally type.
-
-Your maps, prefabs, overrides, and settings never leave your computer.
-
-## Code signing policy
-
-Free code signing provided by SignPath.io, certificate by SignPath Foundation.
-
-Snapmap+'s Windows binaries — the `snapmap-plus.exe` installer and the two overlay DLLs — are code-signed
-with a certificate held by SignPath Foundation, applied automatically in the GitHub Actions release pipeline.
-Every release is built from source in the open, and you can verify a build's provenance with
-`gh attestation verify --repo doom-snapmap/snapmap-plus <file>`.
-
