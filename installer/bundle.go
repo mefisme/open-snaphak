@@ -304,14 +304,14 @@ func downloadAsset(a *ghAsset, token, dest string) error {
 // --- token storage ------------------------------------------------------------------------------------
 
 func tokenPath() (string, error) {
-	base := os.Getenv("LOCALAPPDATA")
-	if base == "" {
+	dir := appDataDir()
+	if dir == "" {
 		return "", fmt.Errorf("couldn't find your local app-data folder (the LOCALAPPDATA environment variable is not set)")
 	}
-	return filepath.Join(base, "open-snaphak", "token"), nil
+	return filepath.Join(dir, "token"), nil
 }
 
-// resolveToken: --token flag > SNAPHAK_TOKEN env > the saved token file.
+// resolveToken: --token flag > SNAPHAK_TOKEN env > the saved token file (new location, then the pre-rename one).
 func resolveToken(f flags) string {
 	if f.token != "" {
 		return f.token
@@ -321,6 +321,12 @@ func resolveToken(f flags) string {
 	}
 	if p, err := tokenPath(); err == nil {
 		if b, err := os.ReadFile(p); err == nil {
+			return strings.TrimSpace(string(b))
+		}
+	}
+	// Pre-rename installs saved the token under %LOCALAPPDATA%\open-snaphak\.
+	if op := oldTokenPath(); op != "" {
+		if b, err := os.ReadFile(op); err == nil {
 			return strings.TrimSpace(string(b))
 		}
 	}

@@ -10,7 +10,7 @@ import (
 )
 
 // installRecord is what an install wrote: where, which version, which files it placed, and which pre-existing
-// files it backed up. Stored at %LOCALAPPDATA%\open-snaphak\install.json so uninstall reverses exactly this.
+// files it backed up. Stored at %LOCALAPPDATA%\snapmap-plus\install.json so uninstall reverses exactly this.
 type installRecord struct {
 	Version     string   `json:"version"`
 	DoomPath    string   `json:"doom_path"`
@@ -27,11 +27,10 @@ type backup struct {
 }
 
 func recordPath() (string, error) {
-	base := os.Getenv("LOCALAPPDATA")
-	if base == "" {
+	dir := appDataDir()
+	if dir == "" {
 		return "", fmt.Errorf("couldn't find your local app-data folder (the LOCALAPPDATA environment variable is not set)")
 	}
-	dir := filepath.Join(base, "open-snaphak")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
@@ -45,7 +44,15 @@ func loadRecord() (*installRecord, error) {
 	}
 	data, err := os.ReadFile(p)
 	if err != nil {
-		return nil, err
+		// Pre-rename installs kept the record at %LOCALAPPDATA%\open-snaphak\; fall back to it and migrate it
+		// forward, so update / status / uninstall still recognise an existing install after the rename.
+		op := oldRecordPath()
+		od, oerr := os.ReadFile(op)
+		if op == "" || oerr != nil {
+			return nil, err
+		}
+		os.WriteFile(p, od, 0o644)
+		data = od
 	}
 	var rec installRecord
 	if err := json.Unmarshal(data, &rec); err != nil {
@@ -168,6 +175,7 @@ func cmdInstall(f flags) error {
 		return fmt.Errorf("installed the files, but couldn't write the install record (%v) -- uninstall may not fully clean up", err)
 	}
 	migrateLegacyLogs(doom) // runtime logs moved to snaphak\logs\ -- fold an older install's snaphak_logs\ in (best-effort)
+	migrateUserData()       // scaffold the app-data content tree + fold a user's old %USERPROFILE%\snaphak\ content forward (best-effort)
 	fmt.Printf("Done. SnapHak %s installed.\n", rec.Version)
 	ensureWebView2Runtime(f) // the HTML UI renders in the WebView2 runtime -- ensure it's present (never fails the install)
 	fmt.Println("Launch DOOM and open the SnapMap editor.")
