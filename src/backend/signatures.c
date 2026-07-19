@@ -1,4 +1,4 @@
-/* signatures.c -- see signatures.h. C port of the reference implementation's signature table for the SnapHak backend.
+/* signatures.c -- see signatures.h. C port of the reference implementation's signature table for the Snapmap+ backend.
  *
  * The scanner mirrors the reference resolver byte-for-byte in behaviour: compile an IDA-style hex
  * pattern to (pattern,mask), find the longest fixed (mask==0xFF) run as a memmem anchor, then verify
@@ -520,9 +520,9 @@ const sig_entry BACKEND_ENGINE_SIGNATURES[] = {
       "48 89 85 A0 01 00 00 48 8B F2 48 8B F9 83 79 38 05",
       0x182B740u },
     { "SessionDevModeGetter", /* devmode: the 8-byte idSessionLocal bool getter at 0x18a31d0
-                               * (movzx eax,[rcx+0x34c89]; ret), CC-padded after. snaphak_disable_devmode
+                               * (movzx eax,[rcx+0x34c89]; ret), CC-padded after. sh_disable_devmode
                                * patches the head 0F B6 81 -> 31 C0 C3 (xor eax,eax; ret) so the getter
-                               * returns 0; snaphak_reenable_devmode code_unpatches it back. The pattern IS
+                               * returns 0; sh_reenable_devmode code_unpatches it back. The pattern IS
                                * the expect bytes -- the disp 0x34c89 (89 4C 03 00) is build-specific and
                                * EMBEDDED so a shifted build REFUSES rather than mis-patches. code_patch
                                * overwrites only the first 3 bytes (bytes 3-7 untouched), so unpatch restores

@@ -5,7 +5,7 @@
  * EARLY-OUTS on any fault whose RIP is not inside DOOMx64vk.exe -- it is an in-editor draw-fault
  * recovery handler, not a logger. So a crash in OUR DLL, in a system/runtime DLL, in non-frame engine
  * code, or a fault the shield does not recover leaves NO trace. This module records where the process dies + what was
- * loaded, to snaphak_diag.log (text) and snaphak_crash.dmp (a minidump) under <DOOM>\snaphak\logs\.
+ * loaded, to sh_diag.log (text) and sh_crash.dmp (a minidump) under <DOOM>\snapmap-plus\logs\.
  *
  * SAFETY (this ships to a stranger -- it must NEVER make the crash worse or hide it):
  *  - Every handler is LOG-ONLY and returns EXCEPTION_CONTINUE_SEARCH; it never edits the CONTEXT.
@@ -23,7 +23,7 @@
  * crash block here. The breadcrumb + the "UEF did not fire" detach line let us INFER that class, and
  * the README tells the user to also grab any %LOCALAPPDATA%\CrashDumps\*.dmp.
  *
- * Compiled ONLY into the diagnostic DLL (build.ps1 -Diag => /DSNAPHAK_DIAG); NOT in the shipped backend.
+ * Compiled ONLY into the diagnostic DLL (build.ps1 -Diag => /DSH_DIAG); NOT in the shipped backend.
  */
 #include <windows.h>
 #include <stdint.h>
@@ -38,7 +38,7 @@
 #pragma comment(lib, "dbghelp.lib")   /* MiniDumpWriteDump */
 
 static char  g_dir[MAX_PATH]      = {0};   /* dir of this DLL (the DOOM root) */
-static char  g_logpath[MAX_PATH]  = {0};   /* g_dir\snaphak_diag.log */
+static char  g_logpath[MAX_PATH]  = {0};   /* g_dir\sh_diag.log */
 static volatile LONG g_installed   = 0;
 static volatile LONG g_cxx_logged  = 0;    /* rate-limit first-chance C++-throw logging */
 static volatile LONG g_fc_logged   = 0;    /* rate-limit first-chance crash-class logging */
@@ -207,13 +207,13 @@ static void dump_env(void)
     char profile[MAX_PATH], sub[MAX_PATH];
     if (g_dir[0]) {
         dump_dir("DOOM dir", g_dir);
-        _snprintf_s(sub, sizeof sub, _TRUNCATE, "%s\\snaphak", g_dir);
-        dump_dir("DOOM\\snaphak (our bundle)", sub);
+        _snprintf_s(sub, sizeof sub, _TRUNCATE, "%s\\snapmap-plus", g_dir);
+        dump_dir("DOOM\\snapmap-plus (our bundle)", sub);
     }
-    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, profile))) {
-        _snprintf_s(sub, sizeof sub, _TRUNCATE, "%s\\snaphak", profile);          dump_dir("USERPROFILE\\snaphak (user data)", sub);
-        _snprintf_s(sub, sizeof sub, _TRUNCATE, "%s\\snaphak\\strings", profile);  dump_dir("USERPROFILE\\snaphak\\strings", sub);
-        _snprintf_s(sub, sizeof sub, _TRUNCATE, "%s\\snaphak\\overrides", profile);dump_dir("USERPROFILE\\snaphak\\overrides", sub);
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, profile))) {
+        _snprintf_s(sub, sizeof sub, _TRUNCATE, "%s\\snapmap-plus", profile);          dump_dir("LOCALAPPDATA\\snapmap-plus (user data)", sub);
+        _snprintf_s(sub, sizeof sub, _TRUNCATE, "%s\\snapmap-plus\\strings", profile);  dump_dir("LOCALAPPDATA\\snapmap-plus\\strings", sub);
+        _snprintf_s(sub, sizeof sub, _TRUNCATE, "%s\\snapmap-plus\\overrides", profile);dump_dir("LOCALAPPDATA\\snapmap-plus\\overrides", sub);
     }
     dump_modules();
 }
@@ -260,7 +260,7 @@ static void write_minidump(PEXCEPTION_POINTERS ep)
     HANDLE h;
     MINIDUMP_EXCEPTION_INFORMATION mei;
     if (!g_dir[0]) return;
-    _snprintf_s(path, sizeof path, _TRUNCATE, "%s\\snaphak\\logs\\snaphak_crash.dmp", g_dir);
+    _snprintf_s(path, sizeof path, _TRUNCATE, "%s\\snapmap-plus\\logs\\sh_crash.dmp", g_dir);
     h = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (h == INVALID_HANDLE_VALUE) { diag_log("minidump: CreateFile failed (err=%lu)", GetLastError()); return; }
     mei.ThreadId = GetCurrentThreadId();
@@ -373,9 +373,9 @@ static DWORD WINAPI env_thread(LPVOID p)
     int i;
     (void)p;
     diag_log("===================================================================");
-    diag_log("SNAPHAK DIAGNOSTIC BUILD -- catch-all crash + environment logger");
+    diag_log("SNAPMAP+ DIAGNOSTIC BUILD -- catch-all crash + environment logger");
     diag_log("  pid=%lu  dir=%s", GetCurrentProcessId(), g_dir);
-    diag_log("  Reproduce the crash, then send snaphak_diag.log AND snaphak_crash.dmp.");
+    diag_log("  Reproduce the crash, then send sh_diag.log AND sh_crash.dmp.");
     diag_log("===================================================================");
 
     Sleep(800);
@@ -413,17 +413,17 @@ void shield_diag_install(HINSTANCE self)
     HANDLE h;
     if (InterlockedExchange(&g_installed, 1)) return;
 
-    /* g_dir = dir of this DLL; g_logpath = g_dir\snaphak_diag.log. Cheap, no I/O under the loader lock. */
+    /* g_dir = dir of this DLL; g_logpath = g_dir\sh_diag.log. Cheap, no I/O under the loader lock. */
     len = GetModuleFileNameA((HMODULE)self, path, MAX_PATH);
-    if (len == 0 || len >= MAX_PATH) { g_dir[0] = '\0'; strcpy_s(g_logpath, MAX_PATH, "snaphak_diag.log"); }
+    if (len == 0 || len >= MAX_PATH) { g_dir[0] = '\0'; strcpy_s(g_logpath, MAX_PATH, "sh_diag.log"); }
     else {
         char *slash = strrchr(path, '\\');
         if (slash) { *slash = '\0'; strncpy_s(g_dir, sizeof g_dir, path, _TRUNCATE); *slash = '\\'; }
-        /* group the diag log + crash dump under <DOOM>\snaphak\logs\ (g_dir stays the DOOM root for the
+        /* group the diag log + crash dump under <DOOM>\snapmap-plus\logs\ (g_dir stays the DOOM root for the
          * env dump; parent then child -- CreateDirectory makes one level at a time) */
-        { char ld[MAX_PATH]; _snprintf_s(ld, MAX_PATH, _TRUNCATE, "%s\\snaphak", g_dir); CreateDirectoryA(ld, NULL);
-          _snprintf_s(ld, MAX_PATH, _TRUNCATE, "%s\\snaphak\\logs", g_dir); CreateDirectoryA(ld, NULL); }
-        _snprintf_s(g_logpath, MAX_PATH, _TRUNCATE, "%s\\snaphak\\logs\\snaphak_diag.log", g_dir);
+        { char ld[MAX_PATH]; _snprintf_s(ld, MAX_PATH, _TRUNCATE, "%s\\snapmap-plus", g_dir); CreateDirectoryA(ld, NULL);
+          _snprintf_s(ld, MAX_PATH, _TRUNCATE, "%s\\snapmap-plus\\logs", g_dir); CreateDirectoryA(ld, NULL); }
+        _snprintf_s(g_logpath, MAX_PATH, _TRUNCATE, "%s\\snapmap-plus\\logs\\sh_diag.log", g_dir);
     }
 
     /* Install crash catchers immediately (loader-lock-safe APIs). Capture the previous UEF EXACTLY
@@ -448,7 +448,7 @@ void shield_diag_install(HINSTANCE self)
 void shield_diag_detach(void)
 {
     if (g_in_uef) {
-        diag_log("DLL_PROCESS_DETACH after an unhandled exception => CRASH (see the UNHANDLED block + snaphak_crash.dmp)");
+        diag_log("DLL_PROCESS_DETACH after an unhandled exception => CRASH (see the UNHANDLED block + sh_crash.dmp)");
     } else if (g_last_code) {
         /* the UEF never fired but a crash-class fault WAS seen first-chance -> likely a __fastfail /
          * heap-stop that bypassed the UEF, OR our filter was displaced. The breadcrumb is the lead. */

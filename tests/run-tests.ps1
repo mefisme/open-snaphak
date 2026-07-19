@@ -1,4 +1,4 @@
-# run-tests.ps1 -- compile + run SnapHak's C unit tests with MSVC (x64). Pure ASCII.
+# run-tests.ps1 -- compile + run Snapmap+'s C unit tests with MSVC (x64). Pure ASCII.
 # Needs Build Tools for Visual Studio 2022 (C++ workload) -- the same toolchain the build scripts use.
 #
 # Usage:

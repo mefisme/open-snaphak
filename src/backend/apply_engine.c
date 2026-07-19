@@ -30,7 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "snaphak_iface.h"
+#include "snapmap_plus_iface.h"
 #include "apply_engine.h"
 #include "typeinfo.h"     /* sh_typeinfo_get_declmgr -- the one shared declMgr accessor */
 #include "ui_bridge.h"    /* sh_ui_get_iface -- reach the toast slot for the apply-result toast */
@@ -97,7 +97,7 @@
  * Separately CONFIRMED: not hovering an entity in the selection is a REAL engine requirement, not a red
  * herring -- with the crash fixed, status code 2 turns out to mean exactly that (the engine prints "Failed
  * to create prefab: not hovering entity in selection." itself before returning it). So the create flow now
- * checks the hovered-id slot (+0x198) up front (see poc_apply_create_prefab in snaphak_ui_webview.cpp)
+ * checks the hovered-id slot (+0x198) up front (see poc_apply_create_prefab in snapmap_plus_ui_webview.cpp)
  * instead of relying on this out-param at all -- simpler, and gives the UI an accurate "not hovering"
  * result instead of the generic "nothing selected". */
 #define PREFAB_CTOR_RVA        0x54d0a0u   /* idSnapEntityPrefab ctor (OG FUN_180004210 local_6d8 ctor) */
@@ -911,7 +911,7 @@ static int slot_serialize_entity(sh_iface *self, int id, char *out_json, int cap
 }
 
 /* PLACEHOLDER inherit a palette-placed Timeline is spawned with (see the +0x298 slot doc in
- * snaphak_iface.h for the why) -- and the portable value it gets normalized to. */
+ * snapmap_plus_iface.h for the why) -- and the portable value it gets normalized to. */
 #define TL_PLACEHOLDER_INHERIT "snapmaps/editor_only/placeholder_target"
 #define TL_PORTABLE_INHERIT    "snapmaps/unknown"
 /* 256 KB -- proven sufficient for the full timeline-entity JSON. An earlier version of this function
@@ -945,7 +945,7 @@ static int tl_splice_portable_inherit(const char *src, char *out, int cap)
 }
 
 /* +0x298 (ext 6) TIMELINE PORTABLE-INHERIT NORMALIZE -- see the full doc comment on
- * sh_normalize_timeline_inherit_fn in snaphak_iface.h. Cheap defsub-inherit read first (no serialize/no
+ * sh_normalize_timeline_inherit_fn in snapmap_plus_iface.h. Cheap defsub-inherit read first (no serialize/no
  * alloc) so this is safe to call every tick on every Timeline-classed id; only a placeholder match pays
  * for the malloc+serialize+splice+commit+free. Commits via ae_apply_one directly (the SAME body +0x290
  * apply_sync calls for kind=0) INLINE on the calling thread -- whichever thread that is is, by

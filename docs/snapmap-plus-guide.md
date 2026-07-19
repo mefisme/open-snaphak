@@ -78,37 +78,37 @@ verify, then redo the depot-download steps above when you want to go back to edi
 
 ### Install Snapmap+ itself
 
-Download **`snaphak.exe`** from the [Snapmap+ site](./) (or from the project's GitHub Releases page)
+Download **`snapmap-plus.exe`** from the [Snapmap+ site](./) (or from the project's GitHub Releases page)
 and **double-click it**. It finds your DOOM 2016 install automatically by looking through your Steam
-libraries, asks you to confirm, and places the overlay. That's the whole install. (`snaphak.exe` is the
-short name Snapmap+'s tooling goes by — SnapHak — which you'll also see in its console commands and
-folder names.)
+libraries, asks you to confirm, and places the overlay. That's the whole install. (In the in-game
+console, Snapmap+'s commands and cvars all carry the short `sh_` prefix — `sh_help` lists them.)
 
 A few practical notes:
 
 - **Close DOOM first.** A running game locks the files — the installer detects this and asks you to
   close it rather than failing cryptically.
 - If auto-detection can't find DOOM (a non-Steam copy, say), run it from a terminal instead and point
-  it at the folder: `snaphak install --doom "C:\path\to\DOOM"`.
+  it at the folder: `snapmap-plus install --doom "C:\path\to\DOOM"`.
 - While Snapmap+ is in **beta**, the installer says "No stable release has been published yet" and
   installs the newest beta automatically — nothing extra to do.
-- **Already installed?** Double-clicking `snaphak.exe` again shows your installed version, tells you
+- **Already installed?** Double-clicking `snapmap-plus.exe` again shows your installed version, tells you
   when a newer one is available (press Enter to update), and takes any command — `update`, `changelog`,
   `uninstall`, `status` — right there, no terminal needed.
-- **Updating later:** run `snaphak update` — it updates both the overlay and `snaphak.exe` itself.
-  You never need to re-download anything from the site.
+- **Updating later:** run `snapmap-plus update` — it updates both the overlay and `snapmap-plus.exe`
+  itself. You never need to re-download anything from the site.
 - **Coming from the original SnapHak?** If your DOOM folder still has the original (closed-source)
   SnapHak in it, the installer notices, tells you, and removes its files as part of the install —
   Snapmap+ fully replaces it, so nothing of the old tool needs to stay behind. Your maps, prefabs and
-  overrides carry straight over (both tools keep them in the same `%USERPROFILE%\snaphak` folder,
-  which is never touched).
-- **Uninstalling:** `snaphak uninstall` restores your DOOM folder to exactly what it was before.
-  Your own Snapmap+ data (prefabs, rawmaps, overrides under `%USERPROFILE%\snaphak`) is left untouched.
-- `snaphak help` in a terminal lists everything else: `status`, `changelog`, `version`.
+  overrides carry straight over: anything in the old `%USERPROFILE%\snaphak` folder is copied into
+  Snapmap+'s own data folder (`%LOCALAPPDATA%\snapmap-plus`), and the old folder itself is never touched.
+- **Uninstalling:** `snapmap-plus uninstall` restores your DOOM folder to exactly what it was before.
+  Your own Snapmap+ data (prefabs, rawmaps, overrides under `%LOCALAPPDATA%\snapmap-plus`) is left
+  untouched.
+- `snapmap-plus help` in a terminal lists everything else: `status`, `changelog`, `version`.
 
 What actually lands in your DOOM folder is small: `XINPUT1_3.dll` in the folder itself, and
-`snaphakui.dll` inside a `snaphak\` subfolder. Everything is hash-verified before a single file is
-touched, and the installer keeps a record so uninstall reverses exactly what it placed.
+`snapmap-plus-ui.dll` inside a `snapmap-plus\` subfolder. Everything is hash-verified before a single
+file is touched, and the installer keeps a record so uninstall reverses exactly what it placed.
 
 ---
 
@@ -425,7 +425,7 @@ it into the map.
 **Organizing:** **New Folder** creates a folder you can drag prefabs into; **Filter prefabs...** narrows
 the list by name. Selecting a prefab and clicking **Delete** removes it permanently.
 
-Prefabs are stored as individual files under `%USERPROFILE%\snaphak\prefabs\` — sharing one is just
+Prefabs are stored as individual files under `%LOCALAPPDATA%\snapmap-plus\prefabs\` — sharing one is just
 sending someone that file; they drop it into their own `prefabs` folder (or the matching subfolder, to
 land it in the same folder on their end) and it shows up in their list. You can drop a file into that
 folder from Windows while Snapmap+ is already running — no restart needed, it picks the new prefab up
@@ -479,8 +479,8 @@ directly, or by turning on `sh_target_any` and wiring it up with the native wire
 ## Rawmaps
 
 With Snapmap+ running, saving a map also writes a **rawmap** — a full, human-readable copy of the map's
-contents — to `%USERPROFILE%\snaphak\rawmap.json`. It's saved automatically on every save; no separate
-step needed. A few things it's useful for:
+contents — to `%LOCALAPPDATA%\snapmap-plus\rawmap.json`. It's saved automatically on every save; no
+separate step needed. A few things it's useful for:
 
 - Sharing a map with another Snapmap+ user without publishing it, or without either of you needing to be
   connected to the game's servers.
@@ -489,12 +489,12 @@ step needed. A few things it's useful for:
   you originally published from.
 - Editing the map file directly in a text editor.
 
-**To load a rawmap into the editor:** open the console (**~**) and run `snapHak_rawmaps_on`. Whatever
+**To load a rawmap into the editor:** open the console (**~**) and run `sh_rawmaps_on`. Whatever
 map you open next (an existing save, to overwrite it, or a blank template) loads from `rawmap.json`
-instead of its own saved data. Once it's loaded, open the console again and run `snapHak_rawmaps_off`.
+instead of its own saved data. Once it's loaded, open the console again and run `sh_rawmaps_off`.
 
-A `rawmap.json` from someone else works the same way — drop it into your own `snaphak` folder (replacing
-your own `rawmap.json`) and load it in with `snapHak_rawmaps_on` as above.
+A `rawmap.json` from someone else works the same way — drop it into your own `snapmap-plus` folder
+(replacing your own `rawmap.json`) and load it in with `sh_rawmaps_on` as above.
 
 ---
 
@@ -620,8 +620,8 @@ The [Custom palette tab](#the-custom-palette-tab) — the Unknown and Timeline e
 from DOOM's own Create menu — is itself built on this system: it's an override that ships with Snapmap+
 by default.
 
-To add your own, place files under `%USERPROFILE%\snaphak\overrides\`, matching the path/filename of the
-resource you want to replace — the same folder the built-in overrides live in.
+To add your own, place files under `%LOCALAPPDATA%\snapmap-plus\overrides\`, matching the path/filename of
+the resource you want to replace — the same folder the built-in overrides live in.
 
 Actually authoring an override's *contents* is a separate skill from placing the file — the format
 depends entirely on which resource you're replacing, and isn't covered in this guide.
@@ -638,7 +638,7 @@ Every time the game asks to open a resource, Snapmap+ resolves it in three steps
 3. **The game's own packaged resource** — used when neither of the above applies.
 
 If your `overrides` folder ever ends up with something broken in it and you want to rule overrides out
-while you track it down, set `snaphak_user_overrides` to `0` in the console — that skips straight to step
+while you track it down, set `sh_user_overrides` to `0` in the console — that skips straight to step
 2/3 for every file without you having to move or delete anything, and setting it back to `1` restores your
 files. Snapmap+ also writes a list of every active override it found to the log each time it starts, so
 you can always check what's currently shadowing what.
@@ -652,7 +652,7 @@ DOOM's own console (press **~** to open it) — some are shortcuts for things th
 others are console-only tools with no window equivalent. Run **`sh_help`** at any time to print the
 full, current list with descriptions directly from the running build; the tables below are the same
 list, organized by what each command is for. (Not repeated here: `sh` and its bulk-edit subcommands,
-`sh_target_any`, and `snapHak_rawmaps_on` / `snapHak_rawmaps_off` — those are covered in their own
+`sh_target_any`, and `sh_rawmaps_on` / `sh_rawmaps_off` — those are covered in their own
 sections above.)
 
 ### Inspecting entities and resources
@@ -693,10 +693,10 @@ Settings you read or change with `<name>` or `<name> <value>` in the console:
 
 | Cvar | Default | What it does |
 |---|---|---|
-| `snaphak_pretty_on` | `0` | Pretty-print the JSON Snapmap+ writes for [rawmaps](#rawmaps). |
-| `snaphak_show_rmcount` | `0` | Draw the current number of active rendermodels on-screen. |
-| `snaphak_copy_reslist_to_clipboard` | `0` | Copy `sh_listres` output to the clipboard automatically. |
-| `snaphak_user_overrides` | `1` | Set to `0` to temporarily ignore your [override](#overrides) files. |
+| `sh_pretty_on` | `0` | Pretty-print the JSON Snapmap+ writes for [rawmaps](#rawmaps). |
+| `sh_show_rmcount` | `0` | Draw the current number of active rendermodels on-screen. |
+| `sh_copy_reslist_to_clipboard` | `0` | Copy `sh_listres` output to the clipboard automatically. |
+| `sh_user_overrides` | `1` | Set to `0` to temporarily ignore your [override](#overrides) files. |
 
 ### Developer and diagnostic tools
 
@@ -712,7 +712,7 @@ them, but they're listed here for completeness since `sh_help` shows them too:
 | `cs_dumpeventdefs` | Dump every eventDef to a file. |
 | `cs_fieldinfo` | Print field info for a type. |
 | `cs_start_render_logging` | Set up the render-logging hook. |
-| `snaphak_disable_devmode` / `snaphak_reenable_devmode` | Turn DOOM's developer features off, or back on, without losing your Bethesda.net connection. |
+| `sh_disable_devmode` / `sh_reenable_devmode` | Turn DOOM's developer features off, or back on, without losing your Bethesda.net connection. |
 
 ---
 

@@ -1,8 +1,8 @@
 # build.ps1 -- the ONE top-level build script: compile the backend (XINPUT1_3.dll) and the WebView2
-# (HTML) frontend (snaphakui.dll) together: backend first, frontend second, always in lockstep.
+# (HTML) frontend (snapmap-plus-ui.dll) together: backend first, frontend second, always in lockstep.
 # Pure ASCII.
 #
-# Why lockstep: the backend and the frontend share ONE ABI header (src\common\snaphak_iface.h). Every
+# Why lockstep: the backend and the frontend share ONE ABI header (src\common\snapmap_plus_iface.h). Every
 # vtable extension the frontend has picked up over time (apply_class_inherit, enum_valid_classes/
 # enum_inherits, id_dev_layer_hidden, and now push_to_stack for the backend-hosted SnapStack port) must
 # be resolved by a MATCHING backend build -- an old backend paired with a freshly-built frontend that
@@ -34,6 +34,6 @@ if ($BackendOnly) {
 } else {
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$here\src\ui\build.ps1"
     if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
-    Write-Host "built: build/XINPUT1_3.dll + build/webview/snaphakui.dll"
+    Write-Host "built: build/XINPUT1_3.dll + build/webview/snapmap-plus-ui.dll"
     Write-Host "package with: package.ps1"
 }

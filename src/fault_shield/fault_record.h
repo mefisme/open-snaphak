@@ -26,7 +26,7 @@ int  shield_format(char *buf, size_t n, const shield_fault *f);
  * any attached debugger) and append to shield_faults.log. */
 void shield_emit(const shield_fault *f);
 
-/* Set the log path to <dir-of-self>\snaphak\logs\shield_faults.log. Call once from DllMain (DLL_PROCESS_ATTACH). */
+/* Set the log path to <dir-of-self>\snapmap-plus\logs\shield_faults.log. Call once from DllMain (DLL_PROCESS_ATTACH). */
 void shield_set_logpath_from_module(HINSTANCE self);
 
 #endif /* SHIELD_FAULT_RECORD_H */

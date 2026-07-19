@@ -24,7 +24,7 @@
  *     rate-limiting rule on the dashboard (no code change needed).
  */
 
-const REPO = 'snaphak/open-snaphak';
+const REPO = 'doom-snapmap/snapmap-plus';
 const API = 'https://api.github.com';
 
 const CATEGORIES = {
@@ -64,7 +64,7 @@ async function gh(bearer, path, opts) {
       'Authorization': 'Bearer ' + bearer,
       'Accept': 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
-      'User-Agent': 'snaphak-feedback-relay',
+      'User-Agent': 'snapmap-plus-feedback-relay',
       ...(o.body ? { 'Content-Type': 'application/json' } : {}),
     },
     body: o.body ? JSON.stringify(o.body) : undefined,
@@ -102,7 +102,7 @@ async function authToken(env) {
   catch (e) { console.log('app auth: jwt build failed:', e.message); return null; }
   const hdrs = {
     'Authorization': 'Bearer ' + jwt, 'Accept': 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'snaphak-feedback-relay',
+    'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'snapmap-plus-feedback-relay',
   };
   const instRes = await fetch(API + '/repos/' + REPO + '/installation', { headers: hdrs });
   if (!instRes.ok) { console.log('app auth: installation lookup ->', instRes.status, (await instRes.text()).slice(0, 200)); return null; }
@@ -153,7 +153,7 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     if (req.method === 'GET' && url.pathname === '/') {
-      return new Response('snaphak feedback relay: OK\n', { headers: { 'Content-Type': 'text/plain' } });
+      return new Response('snapmap-plus feedback relay: OK\n', { headers: { 'Content-Type': 'text/plain' } });
     }
     if (req.method !== 'POST' || url.pathname !== '/report') return json({ ok: false, error: 'not found' }, 404);
 

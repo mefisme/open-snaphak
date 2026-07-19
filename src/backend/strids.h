@@ -1,9 +1,10 @@
 /* strids.h -- the custom #str_ STRING INJECTOR, native C
  * (port of OG's strids detour FUN_1800102e0 / FUN_18000FF10).
  *
- * SnapHak lets custom maps/prefabs reference custom localized strings: it injects #str_<id> -> text
- * mappings from %USERPROFILE%\snaphak\strings\strids.json into the engine's runtime string-id table
- * (idLangDict), so the engine resolves those custom ids just like its own built-in localized strings.
+ * The strids feature lets custom maps/prefabs reference custom localized strings: it injects
+ * #str_<id> -> text mappings from %LOCALAPPDATA%\snapmap-plus\strings\strids.json (the OG read
+ * %USERPROFILE%\snaphak\strings\strids.json) into the engine's runtime string-id table (idLangDict),
+ * so the engine resolves those custom ids just like its own built-in localized strings.
  *
  * MECHANISM (DIRECT, RE of the OG XINPUT1_3.dll + the engine, this work):
  *   OG detours the engine idLangDict radix-sort wrapper `0x1A2B480` with FUN_1800102e0, whose body is:
@@ -60,8 +61,8 @@
 int sh_strids_install(void *sort_body_fn, int sort_status_ok,
                       void *table_lea_fn, void *insert_fn, void *hash_fn, void *idstr_ctor_fn);
 
-/* Set the strids.json source path (default %USERPROFILE%\snaphak\strings\strids.json -- OG's path). NULL
- * resets to default. Returns 1 if a path is set. */
+/* Set the strids.json source path (default %LOCALAPPDATA%\snapmap-plus\strings\strids.json; the OG used
+ * %USERPROFILE%\snaphak\strings\). NULL resets to default. Returns 1 if a path is set. */
 int sh_strids_set_source(const char *path);
 
 /* How many #str_ rows the injector has appended (observability for the test harness). */

@@ -32,8 +32,8 @@ extern uint8_t *g_doom_base;
 typedef BOOL (WINAPI *minidump_write_t)(HANDLE, DWORD, HANDLE, MINIDUMP_TYPE,
                                         PMINIDUMP_EXCEPTION_INFORMATION, PVOID, PVOID);
 
-static char g_crash_dir[MAX_PATH] = {0};   /* <game>\snaphak\crash */
-static char g_dump_path[MAX_PATH] = {0};   /* <game>\snaphak\logs\snaphak_crash.dmp */
+static char g_crash_dir[MAX_PATH] = {0};   /* <game>\snapmap-plus\crash */
+static char g_dump_path[MAX_PATH] = {0};   /* <game>\snapmap-plus\logs\sh_crash.dmp */
 static char g_inst_version[48]    = {0};   /* installed version at arm time */
 static minidump_write_t g_minidump_write = NULL;
 static volatile LONG g_records_written = 0;
@@ -58,17 +58,17 @@ static void crash_dirs_from_module(void)
     slash = strrchr(path, '\\');
     if (!slash) return;
     *(slash + 1) = '\0';
-    /* <game>\snaphak\crash (one level at a time; idempotent) + the dump path under logs\ */
-    _snprintf_s(g_crash_dir, MAX_PATH, _TRUNCATE, "%ssnaphak", path);
+    /* <game>\snapmap-plus\crash (one level at a time; idempotent) + the dump path under logs\ */
+    _snprintf_s(g_crash_dir, MAX_PATH, _TRUNCATE, "%ssnapmap-plus", path);
     CreateDirectoryA(g_crash_dir, NULL);
-    _snprintf_s(g_dump_path, MAX_PATH, _TRUNCATE, "%ssnaphak\\logs", path);
+    _snprintf_s(g_dump_path, MAX_PATH, _TRUNCATE, "%ssnapmap-plus\\logs", path);
     CreateDirectoryA(g_dump_path, NULL);
-    _snprintf_s(g_crash_dir, MAX_PATH, _TRUNCATE, "%ssnaphak\\crash", path);
+    _snprintf_s(g_crash_dir, MAX_PATH, _TRUNCATE, "%ssnapmap-plus\\crash", path);
     CreateDirectoryA(g_crash_dir, NULL);
-    _snprintf_s(g_dump_path, MAX_PATH, _TRUNCATE, "%ssnaphak\\logs\\snaphak_crash.dmp", path);
+    _snprintf_s(g_dump_path, MAX_PATH, _TRUNCATE, "%ssnapmap-plus\\logs\\sh_crash.dmp", path);
 }
 
-/* Read "version" from %LOCALAPPDATA%\open-snaphak\install.json (the installer's manifest -- the same
+/* Read "version" from %LOCALAPPDATA%\snapmap-plus\install.json (the installer's manifest -- the same
  * source the UI reads). Best-effort: absent/malformed -> "" (the record just omits it). */
 static void crash_read_version(void)
 {
@@ -78,7 +78,7 @@ static void crash_read_version(void)
     const char *k;
     char *p, *q;
     if (GetEnvironmentVariableA("LOCALAPPDATA", la, MAX_PATH) == 0) return;
-    _snprintf_s(path, MAX_PATH, _TRUNCATE, "%s\\open-snaphak\\install.json", la);
+    _snprintf_s(path, MAX_PATH, _TRUNCATE, "%s\\snapmap-plus\\install.json", la);
     h = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
     if (h == INVALID_HANDLE_VALUE) return;
     ReadFile(h, data, sizeof data - 1, &got, NULL);

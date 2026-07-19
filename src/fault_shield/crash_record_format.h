@@ -2,7 +2,7 @@
  *
  * A crash record is one small JSON file describing one fault: what class it was, where it hit, the
  * call stack, the engine's own error text when it exists, and when/what version. crash_report.c writes
- * it to disk at fault time; the SnapHak Studio UI reads it back on its next launch (or seconds later,
+ * it to disk at fault time; the Snapmap+ UI reads it back on its next launch (or seconds later,
  * for a recovered fault) and offers the user a crash-report dialog. Kept pure + separately-compilable
  * so the formatter and its escaping are unit-tested off-game (tests/crash_record_test.c), the same
  * split fault_record.h uses for shield_format.

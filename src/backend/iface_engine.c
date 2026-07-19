@@ -25,7 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "snaphak_iface.h"
+#include "snapmap_plus_iface.h"
 #include "iface_engine.h"
 #include "apply_engine.h"   /* the heavy slots (serialize/schedule-apply/read-prefab) */
 #include "signatures.h"
@@ -206,7 +206,7 @@ static const uint8_t *editor_session(void)
 }
 
 /* +0x88 editor-ready poll: 1 in the live editor, 0 in the HUB/menu. The OG gates its own (Qt) window's
- * visibility + the per-frame dispatch on this -- the SnapHak Studio window opens on editor-entry and HIDES on exit.
+ * visibility + the per-frame dispatch on this -- the Snapmap+ window opens on editor-entry and HIDES on exit.
  * NB: this must NOT use editor_session() (the loaded-map ptr +0x204c8) -- that ptr PERSISTS as a stale value
  * in the HUB after a map was loaded, so it false-positives there (the window stayed up on exit). The editor
  * SCREEN object (+0x21088, the Toast target) goes NULL on editor->HUB exit -- the reliable editor-vs-HUB
@@ -928,11 +928,12 @@ static int slot_enum_inherits(sh_iface *self, char *out_buf, int cap, int *out_c
     return cnt > 0 ? 1 : 0;
 }
 
-/* +0xc0 RESOLVE prefab path: %USERPROFILE%\snaphak\<prefix><name>.json. OG FUN_18000ce50:
- * SHGetFolderPathA(CSIDL_PROFILE=0x28) + "/snaphak/" + prefix + name. `prefix` = "prefabs/" (the OG passes
+/* +0xc0 RESOLVE prefab path: %LOCALAPPDATA%\snapmap-plus\<prefix><name>.json. Port of OG FUN_18000ce50:
+ * SHGetFolderPathA(CSIDL_PROFILE=0x28) + "/snaphak/" + prefix + name (the OG's profile-dir path; ours
+ * lives in the consolidated %LOCALAPPDATA%\snapmap-plus\ data root). `prefix` = "prefabs/" (the OG passes
  * the prefabs\ literal). The `.json` suffix is appended by the FRONTEND (matching the OG, which does
  * FUN_1800050c4(prefix,name) + FUN_1800051bc(...,".json") -- here we resolve the DIR+prefix and the caller
- * concatenates name+".json"). To keep ONE call faithful to FUN_18000ce50 (path = profile + "/snaphak/" +
+ * concatenates name+".json"). To keep ONE call faithful to FUN_18000ce50's shape (path = <data-root> +
  * prefix), the FRONTEND passes prefix="prefabs/" and name=<name>.json so out_path is the full file path.
  * Pure Win32 (no engine fns). Returns 1 on success. */
 static int slot_resolve_prefab_path(sh_iface *self, const char *prefix, const char *name,
@@ -941,13 +942,13 @@ static int slot_resolve_prefab_path(sh_iface *self, const char *prefix, const ch
     (void)self;
     if (!out_path || cap <= 0) return 0;
     out_path[0] = '\0';
-    char profile[MAX_PATH];
-    profile[0] = '\0';
-    /* SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, profile) -- the user-profile dir. */
-    HRESULT hr = SHGetFolderPathA(NULL, 0x28 /*CSIDL_PROFILE*/, NULL, 0, profile);
+    char base[MAX_PATH];
+    base[0] = '\0';
+    /* SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, base) -- the local app-data dir. */
+    HRESULT hr = SHGetFolderPathA(NULL, 0x1c /*CSIDL_LOCAL_APPDATA*/, NULL, 0, base);
     if (FAILED(hr)) return 0;
-    _snprintf_s(out_path, (size_t)cap, _TRUNCATE, "%s/snaphak/%s%s",
-                profile, prefix ? prefix : "", name ? name : "");
+    _snprintf_s(out_path, (size_t)cap, _TRUNCATE, "%s/snapmap-plus/%s%s",
+                base, prefix ? prefix : "", name ? name : "");
     return out_path[0] != '\0';
 }
 

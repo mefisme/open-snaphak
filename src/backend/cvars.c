@@ -1,5 +1,5 @@
 /* cvars.c -- see cvars.h. The cvar registrar: the 9 OG cvars (clone of OG XINPUT1_3's static-init
- * cvar table + spine flush FUN_1800229b1 / FUN_180022610) + our own snaphak_user_overrides row.
+ * cvar table + spine flush FUN_1800229b1 / FUN_180022610) + our own sh_user_overrides row.
  *
  * CVAR REGISTER ABI (DIRECT, from the cvar-register flush disasm @0x22610):
  *   ( CvarRegister )( self [embedded idCVar], name, default, typecode, desc, argComp )
@@ -66,10 +66,11 @@ typedef int (*name_hash_fn)(const char *name);
  * the registered name lives at g_cvar_objs[i][0x40]. We hash CVARS[i].name (identical bytes) directly. */
 #define IDCVAR_NAME_OFF           0x40
 
-/* The cvar table: rows 0..8 are the 9 OG cvars, VERBATIM from our cvar-descriptor RE (name / default /
- * typecode 1=BOOL 2=INT 4=FLOAT / description); order matches the descriptor dump. Row 9
- * (snaphak_user_overrides) is OUR OWN addition (no OG counterpart) -- the user-override-layer kill
- * switch the overrides loader reads (overrides.c). */
+/* The cvar table: rows 0..8 are the 9 OG cvars from our cvar-descriptor RE (default / typecode 1=BOOL
+ * 2=INT 4=FLOAT / description verbatim; the OG's snaphak_* name prefix is renamed to our sh_* -- a
+ * deliberate post-rebrand divergence); order matches the descriptor dump. Row 9 (sh_user_overrides) is
+ * OUR OWN addition (no OG counterpart) -- the user-override-layer kill switch the overrides loader
+ * reads (overrides.c). */
 typedef struct cvar_row {
     const char *name;
     const char *def;
@@ -84,10 +85,10 @@ static const cvar_row CVARS[] = {
     { "cs_num_dash_slices",                  "120",  2, "Num slices for applying dash velocity" },
     { "cs_mh_direction_multiplier",          "1.0",  4, "scale meathook direction by this" },
     { "cs_mh_movement_multiplier",           "10.0", 4, "scale meathook velocity by this much" },
-    { "snaphak_pretty_on",                   "0",    1, "enables pretty printing of saved rawmap json" },
-    { "snaphak_show_rmcount",                "0",    1, "draws the current number of rendermodels active" },
-    { "snaphak_copy_reslist_to_clipboard",   "0",    1, "when sh_listres is used the contents will be copied to the clipboard" },
-    { "snaphak_user_overrides",              "1",    1, "when 0, override files in your snaphak profile folder are ignored (built-in defaults and the game's own resources serve instead); use to bisect a broken override set" },
+    { "sh_pretty_on",                        "0",    1, "enables pretty printing of saved rawmap json" },
+    { "sh_show_rmcount",                     "0",    1, "draws the current number of rendermodels active" },
+    { "sh_copy_reslist_to_clipboard",        "0",    1, "when sh_listres is used the contents will be copied to the clipboard" },
+    { "sh_user_overrides",                   "1",    1, "when 0, override files in your Snapmap+ data folder are ignored (built-in defaults and the game's own resources serve instead); use to bisect a broken override set" },
 };
 #define CVAR_COUNT ((int)(sizeof(CVARS) / sizeof(CVARS[0])))
 
@@ -306,7 +307,7 @@ int sh_cvars_install(void *cvar_register, const void *module_base)
         ok += register_one(reg, i);
 
     _snprintf_s(line, sizeof line, _TRUNCATE,
-        "B2: cvars registered %d/%d (register=%p, non-EXPOSE / gate-1-invisible; 9 OG rows + snaphak_user_overrides)",
+        "B2: cvars registered %d/%d (register=%p, non-EXPOSE / gate-1-invisible; 9 OG rows + sh_user_overrides)",
         ok, CVAR_COUNT, cvar_register);
     backend_log(line);
 

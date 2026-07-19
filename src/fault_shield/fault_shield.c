@@ -22,12 +22,12 @@ uint8_t *g_doom_base = NULL;   /* shield's view of the DOOM module (set by shiel
 size_t   g_doom_size = 0;
 
 /* Raw kernel-only persistent log (CreateFile/WriteFile, NO CRT -> safe from any context). In -Diag builds it
- * records the arming timeline to <DOOM>\snaphak\logs\shield_arm.log (WRITE_THROUGH, survives a termination).
+ * records the arming timeline to <DOOM>\snapmap-plus\logs\shield_arm.log (WRITE_THROUGH, survives a termination).
  * In a RELEASE build it is a file-wise no-op -- the arm sequence still flows to OutputDebugString (the in-game
  * console + any attached debugger), so release leaves no shield_arm.log in the DOOM dir. */
 void shield_raw(const char *msg)
 {
-#ifdef SNAPHAK_DIAG
+#ifdef SH_DIAG
     static HANDLE h = INVALID_HANDLE_VALUE;
     static int tried = 0;
     if (h == INVALID_HANDLE_VALUE) {
@@ -39,9 +39,9 @@ void shield_raw(const char *msg)
         char *slash = NULL, *q;
         for (q = path; *q; q++) if (*q == '\\') slash = q;
         if (!slash) return;
-        /* <DOOM>\snaphak\logs\shield_arm.log -- CRT-free path build (lstrcpy/lstrcat + CreateDirectory,
+        /* <DOOM>\snapmap-plus\logs\shield_arm.log -- CRT-free path build (lstrcpy/lstrcat + CreateDirectory,
          * one level at a time) */
-        lstrcpyA(slash + 1, "snaphak");
+        lstrcpyA(slash + 1, "snapmap-plus");
         CreateDirectoryA(path, NULL);
         lstrcatA(path, "\\logs");
         CreateDirectoryA(path, NULL);
@@ -75,7 +75,7 @@ static int shield_install_hooks(void)
  * verified-attach commit point. The shield waits on it (bounded) so the common testing case arms AFTER the tool attaches:
  *   event EXISTS (tool present) -> wait until SetEvent OR the bounded fallback, then arm.
  *   event ABSENT (end user) -> arm IMMEDIATELY (zero added latency). The shield is NEVER skipped. */
-#define SHIELD_INSTR_EVENT_NAME   "Local\\SnaphakInstrAttached"
+#define SHIELD_INSTR_EVENT_NAME   "Local\\SnapmapPlusInstrAttached"
 #define SHIELD_ARM_FALLBACK_MS    10000   /* bounded: a stalled/dead attach event still lets the shield arm */
 
 static void shield_wait_for_instr(void)

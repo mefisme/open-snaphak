@@ -2,7 +2,7 @@
  *
  * WHY: the SnapHak override pack's decls reference custom #str_ strings (palette category names, display
  * names) that the engine resolves through its lang table. Historically those rows came ONLY from
- * %USERPROFILE%\snaphak\strings\strids.json -- a runtime file in the user's profile that is empty on a
+ * %LOCALAPPDATA%\snapmap-plus\strings\strids.json -- a runtime file in the user's data folder that is empty on a
  * fresh install and trivially missing, so even a correct override decl showed raw "#str_..." tokens (or
  * no category). Baking the canonical set INTO the DLL removes that fragility: sh_strids injects these
  * rows UNCONDITIONALLY at startup (the same engine append+resort path the user file uses). The user's

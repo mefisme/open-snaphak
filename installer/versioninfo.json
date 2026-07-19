@@ -19,16 +19,16 @@
 		"FileSubType": "00"
 	},
 	"StringFileInfo": {
-		"Comments": "Installs and updates the SnapHak overlay for DOOM (2016) SnapMap.",
-		"CompanyName": "open-snaphak",
-		"FileDescription": "SnapHak Installer",
+		"Comments": "Installs and updates the Snapmap+ overlay for DOOM (2016) SnapMap.",
+		"CompanyName": "doom-snapmap",
+		"FileDescription": "Snapmap+ Installer",
 		"FileVersion": "",
-		"InternalName": "snaphak.exe",
-		"LegalCopyright": "open-snaphak contributors. MIT License.",
+		"InternalName": "snapmap-plus.exe",
+		"LegalCopyright": "snapmap-plus contributors. MIT License.",
 		"LegalTrademarks": "",
-		"OriginalFilename": "snaphak.exe",
+		"OriginalFilename": "snapmap-plus.exe",
 		"PrivateBuild": "",
-		"ProductName": "SnapHak",
+		"ProductName": "Snapmap+",
 		"ProductVersion": "",
 		"SpecialBuild": ""
 	},

@@ -1,4 +1,4 @@
-/* dllmain.c -- the SnapHak BACKEND DLL bootstrap (our clean-room XINPUT1_3.dll).
+/* dllmain.c -- the Snapmap+ BACKEND DLL bootstrap (our clean-room XINPUT1_3.dll).
  *
  * This is the backend's OWN DllMain -- the OG SnapHak loader/spine lived in XINPUT1_3.dll, and our
  * clone occupies the same load vector. It is SEPARATE from the fault-shield (a distinct proxy DLL with
@@ -17,7 +17,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
-#include <shlobj.h>                       /* SHGetFolderPathA + CSIDL_PROFILE (ensure_user_dirs) */
+#include <shlobj.h>                       /* SHGetFolderPathA + CSIDL_LOCAL_APPDATA (ensure_user_dirs) */
 #pragma comment(lib, "shell32.lib")
 #include "signatures.h"
 #include "hook.h"
@@ -41,7 +41,7 @@
 #include "backend_log.h"
 #include "../fault_shield/fault_shield.h"   /* the merged fault-shield (recover-in-place vs OG's terminate) */
 #include "../fault_shield/fault_record.h"   /* shield_set_logpath_from_module -> shield_faults.log */
-#ifdef SNAPHAK_DIAG
+#ifdef SH_DIAG
 #include "../fault_shield/shield_diag.h"    /* DIAGNOSTIC build (build.ps1 -Diag): catch-all crash + env logger */
 #endif
 
@@ -70,24 +70,26 @@ static void resolve_doom(void)
 #define PB0_POLL_INTERVAL_MS  75
 #define PB0_POLL_TIMEOUT_MS   60000
 
-/* Create the %USERPROFILE%\snaphak\ user-data tree if absent. The disk-backed features (overrides, rawmap
- * swap/save, strids) and the prefab resolver all read/write under this folder but historically ASSUMED
- * it existed (OG SnapHak shipped it; otherwise the user created it by hand). On a fresh profile it is
- * absent, so every one of those features silently no-ops -- e.g. the "unknown entity" override served
- * from snaphak\overrides\ never appears in-game. Create the tree once at startup so a clean install works
- * out of the box. CreateDirectoryA is idempotent (ERROR_ALREADY_EXISTS is benign); any other failure is
- * logged non-fatally. Subfolders mirror every %USERPROFILE%\snaphak\<sub> path the backend builds. */
+/* Create the %LOCALAPPDATA%\snapmap-plus\ user-data tree if absent. The disk-backed features (overrides,
+ * rawmap swap/save, strids) and the prefab resolver all read/write under this folder but historically
+ * ASSUMED it existed. On a fresh profile it is absent, so every one of those features silently no-ops --
+ * e.g. the "unknown entity" override served from overrides\ never appears in-game. Create the tree once
+ * at startup so a clean install works out of the box. (The installer scaffolds the same tree and folds a
+ * pre-rebrand %USERPROFILE%\snaphak\ tree -- the original tool's path, which our pre-rename releases
+ * reused -- forward into it; this is the runtime backstop for a hand-deployed overlay.) CreateDirectoryA
+ * is idempotent (ERROR_ALREADY_EXISTS is benign); any other failure is logged non-fatally. Subfolders
+ * mirror every <data-root>\<sub> path the backend builds. */
 static void ensure_user_dirs(void)
 {
     static const char *subs[] = { "", "\\strings", "\\overrides", "\\prefabs" };
-    char profile[MAX_PATH], path[MAX_PATH];
+    char base[MAX_PATH], path[MAX_PATH];
     int i;
-    if (FAILED(SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, profile))) {
-        backend_log("WARN: SHGetFolderPathA(CSIDL_PROFILE) failed -- snaphak user dirs not created");
+    if (FAILED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, base))) {
+        backend_log("WARN: SHGetFolderPathA(CSIDL_LOCAL_APPDATA) failed -- snapmap-plus user dirs not created");
         return;
     }
     for (i = 0; i < (int)(sizeof subs / sizeof subs[0]); i++) {
-        _snprintf_s(path, sizeof path, _TRUNCATE, "%s\\snaphak%s", profile, subs[i]);
+        _snprintf_s(path, sizeof path, _TRUNCATE, "%s\\snapmap-plus%s", base, subs[i]);
         if (!CreateDirectoryA(path, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
             char line[MAX_PATH + 64];
             _snprintf_s(line, sizeof line, _TRUNCATE, "WARN: CreateDirectory %s failed (err %lu)",
@@ -95,7 +97,7 @@ static void ensure_user_dirs(void)
             backend_log(line);
         }
     }
-    backend_log("snaphak user-data dirs ensured (root + strings/overrides/prefabs)");
+    backend_log("snapmap-plus user-data dirs ensured (root + strings/overrides/prefabs)");
 }
 
 static DWORD WINAPI bootstrap_thread(LPVOID p)
@@ -116,9 +118,9 @@ static DWORD WINAPI bootstrap_thread(LPVOID p)
         "backend attached base=%p size=%zx", (void *)g_doom_base, g_doom_size);
     backend_log(line);
 
-    /* Create %USERPROFILE%\snaphak\{,strings,overrides,prefabs} if a fresh profile lacks it, so
+    /* Create %LOCALAPPDATA%\snapmap-plus\{,strings,overrides,prefabs} if a fresh profile lacks it, so
      * overrides / rawmaps / strids / prefabs work on a clean install instead of silently no-opping
-     * (the reason an end-user couldn't see the "unknown entity" override served from snaphak\overrides\). */
+     * (the reason an end-user couldn't see the "unknown entity" override served from overrides\). */
     ensure_user_dirs();
 
     /* Poll the resolver until the SteamStub has decrypted .text (full DB resolves uniquely) or we time
@@ -252,9 +254,9 @@ static DWORD WINAPI bootstrap_thread(LPVOID p)
          * Pass the resolve STATUS: the ctor is only used to DECODE the vtable LEA, so a hooked prologue
          * (SIG_OK_HOOKED) would corrupt the decode -- refuse on the hook-tolerant fallback. The shadow
          * is always-live once installed (no arm gate) and resolves THREE-LAYER: a user's
-         * overrides/<name> file under %USERPROFILE%\snaphak\ -> our built-in default decls from memory
+         * overrides/<name> file under %LOCALAPPDATA%\snapmap-plus\ -> our built-in default decls from memory
          * (the "*Custom" tab set; never written to disk) -> the engine's packaged resource. The user
-         * layer is gated by the snaphak_user_overrides cvar (registered below; the loader's read is
+         * layer is gated by the sh_user_overrides cvar (registered below; the loader's read is
          * registration-aware so pre-flush opens see the default 1). See overrides.c. */
         void *res_ctor = NULL;
         int   ctor_clean = 0;
@@ -284,12 +286,13 @@ static DWORD WINAPI bootstrap_thread(LPVOID p)
         sh_commands_install(add_cmd, cmdsys, printf_d, get_decls, g_doom_base);
 
         /* backend touch: AFTER `sh` is registered (sh_commands above registers the "sh" command),
-         * create the shared UI-interface object + LoadLibraryA(".\\snaphak\\snaphakui.dll") +
-         * CreateThread(snaphak_ui_init, &argblock{argc,argv,out-slot,interface}). This is the OG spine
+         * create the shared UI-interface object + LoadLibraryA(".\\snapmap-plus\\snapmap-plus-ui.dll") +
+         * CreateThread(sh_ui_init, &argblock{argc,argv,out-slot,interface}). This is the OG spine
          * tail of FUN_1800229b1 (the interface is built + handed to the frontend right after the AddCommand
-         * spine). Once this runs, `sh` stops reporting "Ui interface doesnt exist yet!" (it gates on the
+         * spine; the OG loaded .\snaphak\snaphakui.dll / snaphak_ui_init -- same mechanism, our names).
+         * Once this runs, `sh` stops reporting "Ui interface doesnt exist yet!" (it gates on the
          * interface sh_ui_get_iface returns). The interface + its register/unregister/drain bodies are the
-         * generic factory in ../common/snaphak_iface.c. See ui_bridge.c. */
+         * generic factory in ../common/snapmap_plus_iface.c. See ui_bridge.c. */
         sh_ui_bridge_install();
 
         /* backend touch: resolve the heavy 8-pass apply-chain engine fns (entity-clone /
@@ -364,12 +367,12 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved)
     (void)reserved;
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(hinst);
-        backend_set_logpath_from_module(hinst);   /* snaphak_backend.log under <DOOM>\snaphak\logs\ */
-        shield_set_logpath_from_module(hinst);     /* shield_faults.log under <DOOM>\snaphak\logs\ (shield's own log) */
-#ifdef SNAPHAK_DIAG
+        backend_set_logpath_from_module(hinst);   /* sh_backend.log under <DOOM>\snapmap-plus\logs\ */
+        shield_set_logpath_from_module(hinst);     /* shield_faults.log under <DOOM>\snapmap-plus\logs\ (shield's own log) */
+#ifdef SH_DIAG
         /* DIAGNOSTIC build only: arm the catch-all crash + environment logger FIRST, so it captures a
          * crash ANYWHERE (incl. outside the recovery shield's DOOM-only VEH, and __fastfail/heap faults).
-         * Log-only -- never alters control flow. Writes snaphak_diag.log under <DOOM>\snaphak\logs\. */
+         * Log-only -- never alters control flow. Writes sh_diag.log under <DOOM>\snapmap-plus\logs\. */
         shield_diag_install(hinst);
 #endif
         /* Don't do engine work in DllMain (loader lock). Spin the bootstrap onto its own thread. */
@@ -379,9 +382,9 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved)
          * It self-resolves cvarSys via its own CmdSystemLea sig scan, independent of the bootstrap. */
         sh_cvar_unlock_start();
     }
-#ifdef SNAPHAK_DIAG
+#ifdef SH_DIAG
     else if (reason == DLL_PROCESS_DETACH) {
-        shield_diag_detach();   /* DIAGNOSTIC: record crash-vs-clean-exit in snaphak_diag.log */
+        shield_diag_detach();   /* DIAGNOSTIC: record crash-vs-clean-exit in sh_diag.log */
     }
 #endif
     return TRUE;

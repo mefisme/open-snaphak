@@ -43,11 +43,11 @@ by design; judging that two differently-worded reports are the same bug stays a 
 
 The same pipeline's second producer. When the game hits a serious fault, the fault machinery writes a
 small **crash record** (JSON — fault class, exception code, `module+0xRVA`, call stack, the engine's own
-error message when there is one, timestamp, installed version) to `<game>\snaphak\crash\`, using
+error message when there is one, timestamp, installed version) to `<game>\snapmap-plus\crash\`, using
 crash-safe file writes only. The Studio UI polls that folder and auto-opens the **crash-report dialog**
 (branded header, same style as the main window): for a fault the editor *survived*, seconds after it
 happens; for a fault that killed the game, on the next launch ("Snapmap+ crashed last session"). Truly
-fatal classes also save a local crash dump (`snaphak\logs\snaphak_crash.dmp`) — it is never uploaded;
+fatal classes also save a local crash dump (`snapmap-plus\logs\sh_crash.dmp`) — it is never uploaded;
 an issue notes where it lives so a maintainer can ask for it.
 
 The dialog shows exactly what was recorded (the error + the call stack), takes an optional "what were

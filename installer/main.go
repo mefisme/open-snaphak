@@ -1,6 +1,6 @@
-// snaphak -- the open-snaphak installer.
+// snapmap-plus -- the Snapmap+ installer.
 //
-// A single static Windows CLI that installs / updates / removes the SnapHak overlay in a DOOM 2016 install,
+// A single static Windows CLI that installs / updates / removes the Snapmap+ overlay in a DOOM 2016 install,
 // with backup and an uninstall that restores vanilla. It detects DOOM, deploys the overlay (or
 // downloads a release), and keeps a record so uninstall reverses exactly what it placed. Stdlib only, no
 // external dependencies.
@@ -12,20 +12,20 @@ import (
 	"os"
 )
 
-// version is set at build time: `go build -ldflags "-X main.version=v1.2.3" -o snaphak.exe .`
+// version is set at build time: `go build -ldflags "-X main.version=v1.2.3" -o snapmap-plus.exe .`
 var version = "dev"
 
 func usage() {
-	fmt.Print(`snaphak -- open-snaphak installer (` + version + `)
+	fmt.Print(`snapmap-plus -- the Snapmap+ installer (` + version + `)
 
 Usage:
-  snaphak install   [--doom <path>] [--local <dist-dir>] [--release <tag>] [--beta] [--yes]
-  snaphak update    [--doom <path>] [--release <tag>] [--beta] [--no-self] [--yes]
-  snaphak uninstall [--doom <path>] [--yes]
-  snaphak changelog
-  snaphak status
-  snaphak version
-  snaphak help
+  snapmap-plus install   [--doom <path>] [--local <dist-dir>] [--release <tag>] [--beta] [--yes]
+  snapmap-plus update    [--doom <path>] [--release <tag>] [--beta] [--no-self] [--yes]
+  snapmap-plus uninstall [--doom <path>] [--yes]
+  snapmap-plus changelog
+  snapmap-plus status
+  snapmap-plus version
+  snapmap-plus help
 
 Options:
   --doom <path>       The DOOM install dir (the folder with DOOMx64vk.exe).
@@ -34,19 +34,19 @@ Options:
                       downloading a release.
   --release <tag>     Install a specific release version instead of the latest.
   --beta              Install the latest beta (pre-release) instead of the latest stable.
-  --no-self           With "update": don't also update snaphak.exe itself (overlay only).
+  --no-self           With "update": don't also update snapmap-plus.exe itself (overlay only).
   --yes, -y           Skip the "are you sure?" confirmation (for scripts / automation).
 
 With no --local, install/update download from GitHub. Uninstall restores any files it
-replaced and leaves your %USERPROFILE%\snaphak data untouched.
+replaced and leaves your Snapmap+ modding data untouched.
 
-Running snaphak with no arguments (a double-click) opens an interactive prompt: it offers
+Running snapmap-plus with no arguments (a double-click) opens an interactive prompt: it offers
 to install (or to update when a newer version is out), and takes any command above.
 `)
 }
 
 func main() {
-	cleanupSelfUpdateLeftovers() // remove any snaphak.exe.old a prior self-update left behind
+	cleanupSelfUpdateLeftovers() // remove any <exe>.old a prior self-update left behind
 	if len(os.Args) < 2 {
 		// no args = a double-click -> the status-aware interactive prompt (install / update notice /
 		// full command loop), so every command works without a terminal or PATH.
@@ -104,7 +104,7 @@ type flags struct {
 	beta    bool
 	token   string
 	yes     bool
-	noSelf  bool // with `update`: skip refreshing snaphak.exe itself
+	noSelf  bool // with `update`: skip refreshing snapmap-plus.exe itself
 }
 
 // parseFlags is a tiny "--key value" parser (the tool's option surface is small + fixed).

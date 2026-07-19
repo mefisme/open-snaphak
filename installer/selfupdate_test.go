@@ -29,9 +29,9 @@ func TestShouldSelfUpdate(t *testing.T) {
 // (to be cleaned on the next launch).
 func TestReplaceExe(t *testing.T) {
 	tmp := t.TempDir()
-	path := filepath.Join(tmp, "snaphak.exe")
+	path := filepath.Join(tmp, "snapmap-plus.exe")
 	writeF(t, path, "OLD")
-	newExe := filepath.Join(tmp, "new", "snaphak.exe")
+	newExe := filepath.Join(tmp, "new", "snapmap-plus.exe")
 	writeF(t, newExe, "NEW")
 
 	if err := replaceExe(path, newExe); err != nil {
@@ -49,7 +49,7 @@ func TestReplaceExe(t *testing.T) {
 // is left behind -- the caller is never left without a working exe.
 func TestReplaceExeRollbackOnMissingNew(t *testing.T) {
 	tmp := t.TempDir()
-	path := filepath.Join(tmp, "snaphak.exe")
+	path := filepath.Join(tmp, "snapmap-plus.exe")
 	writeF(t, path, "OLD")
 	missing := filepath.Join(tmp, "does-not-exist.exe")
 
@@ -67,10 +67,10 @@ func TestReplaceExeRollbackOnMissingNew(t *testing.T) {
 // TestReplaceExeStaleOldIsCleared: an unlocked leftover .old from a past run is simply replaced.
 func TestReplaceExeStaleOldIsCleared(t *testing.T) {
 	tmp := t.TempDir()
-	path := filepath.Join(tmp, "snaphak.exe")
+	path := filepath.Join(tmp, "snapmap-plus.exe")
 	writeF(t, path, "OLD")
 	writeF(t, path+".old", "STALE")
-	newExe := filepath.Join(tmp, "new", "snaphak.exe")
+	newExe := filepath.Join(tmp, "new", "snapmap-plus.exe")
 	writeF(t, newExe, "NEW")
 
 	if err := replaceExe(path, newExe); err != nil {
@@ -88,7 +88,7 @@ func TestReplaceExeStaleOldIsCleared(t *testing.T) {
 // and touches nothing else.
 func TestRemoveOldLeftoversSweepsAllSuffixes(t *testing.T) {
 	tmp := t.TempDir()
-	exe := filepath.Join(tmp, "snaphak.exe")
+	exe := filepath.Join(tmp, "snapmap-plus.exe")
 	writeF(t, exe, "CURRENT")
 	writeF(t, exe+".old", "a")
 	writeF(t, exe+".old2", "b")

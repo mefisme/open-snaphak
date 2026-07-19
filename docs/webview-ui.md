@@ -1,8 +1,8 @@
-# The SnapHak Studio frontend (WebView2 / HTML)
+# The Snapmap+ frontend (WebView2 / HTML)
 
-`snaphakui.dll` renders the "SnapHak Studio" UI as HTML/CSS/JS in a Microsoft Edge **WebView2** control.
-It is **the** frontend: the `snaphak_ui_init` entry (export ordinal 10), the backend interface contract
-(`src/common/snaphak_iface.h`), and a manual 30 Hz think-loop draining the work-queue (`+0x1a0`), driven
+`snapmap-plus-ui.dll` renders the Snapmap+ UI as HTML/CSS/JS in a Microsoft Edge **WebView2** control.
+It is **the** frontend: the `sh_ui_init` entry (export ordinal 10), the backend interface contract
+(`src/common/snapmap_plus_iface.h`), and a manual 30 Hz think-loop draining the work-queue (`+0x1a0`), driven
 by the backend (`XINPUT1_3.dll`) over that interface.
 
 **Status: the shipped frontend.** It is built by the default `build.ps1`, packaged by `package.ps1`,
@@ -24,27 +24,27 @@ DLL ships.
 
 | File | What |
 |---|---|
-| `src/ui/webview/snaphak_ui_webview.cpp` | The WebView2 host: the `snaphak_ui_init` entry, a Win32 window, the WebView2 bring-up, the 30 Hz think-loop, and the JS <-> native bridge. |
+| `src/ui/webview/snapmap_plus_ui_webview.cpp` | The WebView2 host: the `sh_ui_init` entry, a Win32 window, the WebView2 bring-up, the 30 Hz think-loop, and the JS <-> native bridge. |
 | `src/ui/webview/mockup.html` | The UI (HTML/CSS/JS), embedded into the DLL at build time. Self-populates with sample data when opened in a plain browser (a "preview mode", inert in DOOM). |
-| `src/ui/build.ps1` | Builds `build/webview/snaphakui.dll`: fetches the WebView2 SDK from NuGet into `build/` (gitignored), statically links the loader, embeds the HTML. Reuses `sl_exports.cpp` + `snaphakui.def`. Invoked by the repo-root `build.ps1` (backend + frontend in lockstep). |
+| `src/ui/build.ps1` | Builds `build/webview/snapmap-plus-ui.dll`: fetches the WebView2 SDK from NuGet into `build/` (gitignored), statically links the loader, embeds the HTML. Reuses `sl_exports.cpp` + `snapmap-plus-ui.def`. Invoked by the repo-root `build.ps1` (backend + frontend in lockstep). |
 
 ## Build + deploy
 
 ```powershell
-# from the repo root -- builds the backend (build/XINPUT1_3.dll) + the frontend (build/webview/snaphakui.dll)
+# from the repo root -- builds the backend (build/XINPUT1_3.dll) + the frontend (build/webview/snapmap-plus-ui.dll)
 powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1
-# assemble the lean overlay (2 files: XINPUT1_3.dll + snaphak/snaphakui.dll)
+# assemble the lean overlay (2 files: XINPUT1_3.dll + snapmap-plus/snapmap-plus-ui.dll)
 powershell -NoProfile -ExecutionPolicy Bypass -File package.ps1           # -> dist/
-installer\snaphak.exe install --local dist --yes                          # deploy (DOOM must be closed)
+installer\snapmap-plus.exe install --local dist --yes                     # deploy (DOOM must be closed)
 ```
 
 `package.ps1` assembles a lean overlay that ships **only** the two clone DLLs (the WebView2 runtime is
-system-installed). Runtime log: `<DOOM>\snaphak\logs\webview_poc.log`.
+system-installed). Runtime log: `<DOOM>\snapmap-plus\logs\webview_poc.log`.
 
 ## How it maps to the backend interface
 
 The frontend holds no engine addresses; it calls the backend only through the vtable slots pinned in
-`src/common/snaphak_iface.h`:
+`src/common/snapmap_plus_iface.h`:
 
 | UI feature | Interface slot(s) |
 |---|---|
@@ -58,7 +58,7 @@ The frontend holds no engine addresses; it calls the backend only through the vt
 | Select in editor (list -> editor) | `clear_selection` +0x148, `add_to_selection` +0x138 |
 | Class / Inherit autocomplete | `enum_valid_classes` +0x270, `enum_inherits` +0x278 |
 | Camera Origin (X/Y/Z + Lock Position) | `get_editor_vec3` +0x08, `set_editor_vec3` +0x00 |
-| Installed version readout | reads `%LOCALAPPDATA%\open-snaphak\install.json` (written by the installer) |
+| Installed version readout | reads `%LOCALAPPDATA%\snapmap-plus\install.json` (written by the installer) |
 | Deselect (explicit button, "Select in 3D editor" mode) | `clear_selection` +0x148 |
 | Live "Create from selection (N)" button count | `get_selection` +0x150, polled every ~330 ms independent of the sync checkboxes |
 | Prefabs list, detail pane, delete/rename, folders (create/rename/delete/move) | `resolve_prefab_path` +0xc0 only -- pure Win32 file/directory ops (`FindFirstFileA`, `DeleteFileA`, `MoveFileA`, `CreateDirectoryA`, `RemoveDirectoryA`) on the resolved path. No other engine slot involved, unaffected by the +0xb0 issues below. |
@@ -68,8 +68,8 @@ The frontend holds no engine addresses; it calls the backend only through the vt
 | Open a timeline (tabs + events) | `serialize_entity` +0xc8 -- the same slot Save-to-Decl and Push-to-stack already use, JSON-parsed client-side |
 | Timeline event-arg dropdowns (decl / enum / per-entity asset lists) | `enum_decls_of_resclass` +0x110 -- the same shared slot for both decl-name and enum-member enumeration |
 | Save Timeline (commit `componentTimeLine` / `encounterComponent`) | `apply_edit` kind=0 -- the same path Save-to-Decl already uses, id-targeted instead of paste-targeted |
-| Send feedback (the bottom-right "?" dialog) | no engine slot -- the page posts `reportSubmit` with an opaque JSON payload; the host POSTs it to the feedback relay on a short-lived worker thread (WinHTTP, the frontend's only network touch -- see the capability note in `snaphak_ui_webview.cpp`) and answers `reportResult {ok, mode, number}` -> green/red toast. Pipeline: [`feedback.md`](feedback.md) |
-| Crash-report dialog (auto-opens on a recorded crash) | no engine slot -- the host polls `<game>\snaphak\crash\` (~2 s) for a crash record the backend wrote at fault time and posts `crashPending {record, count}`; the page auto-opens the dialog. Send composes the payload host-side (`crashSubmit` -> `category:"crash"`, optional anonymized log tails) and rides the SAME WinHTTP thread + `reportResult` as feedback; `crashDismiss` clears the pending record. Pipeline: [`feedback.md`](feedback.md) |
+| Send feedback (the bottom-right "?" dialog) | no engine slot -- the page posts `reportSubmit` with an opaque JSON payload; the host POSTs it to the feedback relay on a short-lived worker thread (WinHTTP, the frontend's only network touch -- see the capability note in `snapmap_plus_ui_webview.cpp`) and answers `reportResult {ok, mode, number}` -> green/red toast. Pipeline: [`feedback.md`](feedback.md) |
+| Crash-report dialog (auto-opens on a recorded crash) | no engine slot -- the host polls `<game>\snapmap-plus\crash\` (~2 s) for a crash record the backend wrote at fault time and posts `crashPending {record, count}`; the page auto-opens the dialog. Send composes the payload host-side (`crashSubmit` -> `category:"crash"`, optional anonymized log tails) and rides the SAME WinHTTP thread + `reportResult` as feedback; `crashDismiss` clears the pending record. Pipeline: [`feedback.md`](feedback.md) |
 
 Heavy engine writes (Save, Delete, Select-in-editor) are snapshotted in the JS message callback and
 applied on the next think-loop frame under the loop mutex, keeping them off the re-entrant callback.
@@ -96,7 +96,7 @@ entry at the bottom is the original POC buildout, before this doc tracked dates 
 
 - **Crash reporting**, the feedback pipeline's second producer. When the game hits a serious fault, the
   backend fault machinery writes a small JSON **crash record** (fault class, code, `module+0xRVA`, call
-  stack, the engine's own error text when there is one, timestamp, version) to `<game>\snaphak\crash\`
+  stack, the engine's own error text when there is one, timestamp, version) to `<game>\snapmap-plus\crash\`
   with crash-safe file writes. The host think-loop polls that folder (~2 s, gated on the page being
   loaded) and posts `crashPending {record, count}`; the page auto-opens a **branded** crash dialog (the
   menubar logo + wordmark) -- in-session seconds after a *survived* fault, on the next launch for one
@@ -318,7 +318,7 @@ more covered in [`backend-changes.md`](backend-changes.md)):
   rejection of its own -- a prefab/folder name containing `..` or a path separator would resolve
   outside the `prefabs\` tree before ever reaching `fopen`/`DeleteFileA`/`MoveFileA`/`CreateDirectoryA`/
   `RemoveDirectoryA`. Only the JS side guarded this before. Added a native `poc_valid_name()` check
-  (rejects `..`, `/`, `\`, `:`, empty, and >200 chars) in `snaphak_ui_webview.cpp`, wired into the two
+  (rejects `..`, `/`, `\`, `:`, empty, and >200 chars) in `snapmap_plus_ui_webview.cpp`, wired into the two
   choke-point helpers every prefab/folder file op already funnels through (`poc_prefab_dir`,
   `poc_prefab_file_path`) plus the one direct caller (`poc_apply_create_prefab`).
 - **Pinned the WebView2 SDK version.** `build-webview.ps1` fetched NuGet's `index.json` and took
@@ -326,11 +326,11 @@ more covered in [`backend-changes.md`](backend-changes.md)):
   theoretical: the SDK actually cached on disk from an earlier run was `1.0.4071-prerelease`. Replaced
   with a hardcoded `$wvPinnedVersion = "1.0.4078.44"` (the newest *stable* release at the time), to be
   bumped deliberately going forward -- needed before wiring the webview build into CI.
-- **Null-checked the entity-list malloc.** `g_ents`/`g_tls` (`snaphak_ui_init`) were `malloc`'d with no
+- **Null-checked the entity-list malloc.** `g_ents`/`g_tls` (`sh_ui_init`) were `malloc`'d with no
   null-check before use. In practice a null `g_ents` was already non-fatal -- the one write site
   (`poc_collect`) sits inside a `__try`/`__except`, so a null-deref got silently caught as a fault and
   returned an empty list -- but that's an accidental safety net, not an intentional one, and it doesn't
-  cover every read site. Now `snaphak_ui_init` checks both allocations explicitly, logs, and aborts init
+  cover every read site. Now `sh_ui_init` checks both allocations explicitly, logs, and aborts init
   cleanly on failure instead of relying on SEH to paper over it.
 
 Also fixed as part of the same follow-up round: the "deferred applies run on the main-thread execution
@@ -549,7 +549,7 @@ that doc for the write-up.
   was set via `add_to_selection` (confirmed: a purely native selection deselects fine on its own -- only
   our externally-driven selection gets stuck), and the root cause is unRE'd in this codebase, so this is a
   reliable escape hatch rather than a fix for the underlying click behavior.
-- **Prefabs tab, wired to the real filesystem** (`%USERPROFILE%\snaphak\prefabs\`) -- no fake/mockup data:
+- **Prefabs tab, wired to the real filesystem** (`%LOCALAPPDATA%\snapmap-plus\prefabs\`) -- no fake/mockup data:
   - Live list of real `.json` prefab files, refreshed from disk on every Prefabs-tab click; an empty-state
     message when there are none yet.
   - Detail pane on selecting a prefab: real entity count and a per-`className` tally, read directly from

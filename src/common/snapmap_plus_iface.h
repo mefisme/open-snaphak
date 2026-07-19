@@ -1,9 +1,9 @@
-/* snaphak_iface.h -- THE SHARED UI-INTERFACE ABI (the matched-pair bridge between the two clone DLLs).
+/* snapmap_plus_iface.h -- THE SHARED UI-INTERFACE ABI (the matched-pair bridge between the two clone DLLs).
  *
  * This header is the DURABLE shared-ABI artifact. It pins the EXACT binary layout of
- * the "UI-interface" object that the BACKEND (XINPUT1_3.dll) creates and the FRONTEND (snaphakui.dll)
- * consumes. Both clone DLLs include this header so the object is a MATCHED PAIR -- the backend writes the
- * vtable + fields, the frontend reads them at the same offsets.
+ * the "UI-interface" object that the BACKEND (XINPUT1_3.dll) creates and the FRONTEND
+ * (snapmap-plus-ui.dll) consumes. Both clone DLLs include this header so the object is a MATCHED PAIR --
+ * the backend writes the vtable + fields, the frontend reads them at the same offsets.
  *
  *   OG provenance (DIRECT, RE-confirmed against the OG binaries this session):
  *     - object: XINPUT1_3 FUN_1800229b1 builds `operator_new(0x60)`, sets `*obj = &PTR_FUN_180035d30`
@@ -15,7 +15,7 @@
  *     - vtable: 77 slots (+0x00..+0x260), DIRECT cell-dump from the OG binary.
  *       The live slots are +0x188 REGISTER / +0x190 UNREGISTER / +0x1a0 DRAIN (the work-queue).
  *
- * Build-portability: this is the clone's OWN ABI (clone XINPUT1_3 <-> clone snaphakui), self-
+ * Build-portability: this is the clone's OWN ABI (clone XINPUT1_3 <-> clone snapmap-plus-ui), self-
  * consistent and NOT DOOM-build-dependent. The ONLY hardcoded offsets that cross the DLL line are the
  * vtable-slot offsets pinned here. The build-specific ENGINE offsets (editor+0x209a8, entity layout) live
  * BEHIND this vtable in the backend -- re-derived there, never here.
@@ -28,8 +28,8 @@
  * Clean-room: ported from our own RE (the OG vtable cell-dump + the
  * FUN_1800229b1 / FUN_180015c04 decompiles). Zero OG SnapHak bytes.
  */
-#ifndef SNAPHAK_IFACE_H
-#define SNAPHAK_IFACE_H
+#ifndef SNAPMAP_PLUS_IFACE_H
+#define SNAPMAP_PLUS_IFACE_H
 
 #include <stdint.h>
 
@@ -100,9 +100,10 @@ typedef void         (*sh_rebuild_declsource_fn)(struct sh_iface *self, int id, 
  * returns the byte length (0 on failure). OG FUN_180006ba0 -> FUN_180004210. */
 typedef int          (*sh_serialize_selection_fn)(struct sh_iface *self, char *out_json, int cap);  /* +0xb0 */
 
-/* +0xc0 RESOLVE prefab path: %USERPROFILE%\snaphak\prefabs\<name>.json into out_path. Returns 1 on
+/* +0xc0 RESOLVE prefab path: %LOCALAPPDATA%\snapmap-plus\prefabs\<name>.json into out_path. Returns 1 on
  * success (and out_ok != 0). OG FUN_180006bc0 -> FUN_18000ce50 (SHGetFolderPathA + "/snaphak/" + prefix +
- * name). `prefix` = "prefabs/" (the OG passes the prefabs\ literal as the path prefix). */
+ * name -- the OG's profile-dir path; ours is the consolidated data root). `prefix` = "prefabs/" (the OG
+ * passes the prefabs\ literal as the path prefix). */
 typedef int          (*sh_resolve_prefab_path_fn)(struct sh_iface *self, const char *prefix,
                                                   const char *name, char *out_path, int cap);       /* +0xc0 */
 
@@ -426,8 +427,9 @@ struct sh_iface {
 };
 
 /* ------------------------------------------------------------------ the CreateThread arg block -----
- * snaphak_ui_init receives `param_1` = a pointer to this block (OG &DAT_18003e5e0). The OG accesses:
- *   param_1[0] = out-slot   (snaphak_ui_init writes the loop-state obj here: `*param_1[0] = DAT_180031858`)
+ * The UI-init entry (ours: sh_ui_init; the OG's: snaphak_ui_init) receives `param_1` = a pointer to this
+ * block (OG &DAT_18003e5e0). The OG accesses:
+ *   param_1[0] = out-slot   (the init writes the loop-state obj here: `*param_1[0] = DAT_180031858`)
  *   param_1[1] = argc       (passed to QApplication as `int*`)
  *   param_1[2] = argv       (passed to QApplication as `char**`)
  *   param_1[3] = interface  (= DAT_18003e608 = the sh_iface* the frontend caches as WIN[4])
@@ -444,7 +446,7 @@ typedef struct sh_ui_argblock {
 /* ------------------------------------------------------------------ backend factory ----------------
  * Build a minimal interface object: allocate it, install the vtbl, init the mutex, allocate the
  * sub-object (empty cmd-map + empty work-queue), wire the REGISTER/UNREGISTER/DRAIN bodies. Hosted in
- * the backend (snaphak_iface.c). The `sh` dispatcher gates on the returned pointer; NULL -> "Ui
+ * the backend (snapmap_plus_iface.c). The `sh` dispatcher gates on the returned pointer; NULL -> "Ui
  * interface doesnt exist yet!". Returns NULL on allocation failure. */
 sh_iface *sh_iface_create(void);
 
@@ -527,4 +529,4 @@ void sh_iface_bind_engine_slots(const sh_iface_engine_slots *slots);
 }
 #endif
 
-#endif /* SNAPHAK_IFACE_H */
+#endif /* SNAPMAP_PLUS_IFACE_H */

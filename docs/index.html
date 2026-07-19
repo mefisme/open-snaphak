@@ -17,8 +17,8 @@
     <a class="wordmark" href="./">Snapmap<span class="plus">+</span></a>
     <nav class="navlinks">
       <a href="snapmap-plus-guide.html">Guide</a>
-      <a href="https://github.com/snaphak/open-snaphak/releases">Changelog</a>
-      <a href="https://github.com/snaphak/open-snaphak">GitHub</a>
+      <a href="https://github.com/doom-snapmap/snapmap-plus/releases">Changelog</a>
+      <a href="https://github.com/doom-snapmap/snapmap-plus">GitHub</a>
     </nav>
   </div>
 </header>
@@ -35,8 +35,8 @@
         &mdash; console players included, nothing to install on their end.
       </p>
       <div class="cta-row">
-        <a class="btn btn-primary" data-dl href="https://github.com/snaphak/open-snaphak/releases">
-          &#8595; Download snaphak.exe
+        <a class="btn btn-primary" data-dl href="https://github.com/doom-snapmap/snapmap-plus/releases">
+          &#8595; Download snapmap-plus.exe
         </a>
         <a class="btn btn-ghost" href="snapmap-plus-guide.html">Read the guide</a>
       </div>
@@ -95,7 +95,7 @@
       <div class="steps">
         <div class="step">
           <h3>Download</h3>
-          <p>Grab <code>snaphak.exe</code> with the button above. One small file &mdash; it keeps itself and Snapmap+ up to date from then on.</p>
+          <p>Grab <code>snapmap-plus.exe</code> with the button above. One small file &mdash; it keeps itself and Snapmap+ up to date from then on.</p>
         </div>
         <div class="step">
           <h3>Double-click it</h3>
@@ -144,13 +144,13 @@
   <div class="wrap">
     <div class="footer-links">
       <a href="snapmap-plus-guide.html">Guide</a>
-      <a href="https://github.com/snaphak/open-snaphak/releases">Release notes</a>
-      <a href="https://github.com/snaphak/open-snaphak">Source on GitHub</a>
-      <a href="https://github.com/snaphak/open-snaphak/blob/main/LICENSE">MIT License</a>
+      <a href="https://github.com/doom-snapmap/snapmap-plus/releases">Release notes</a>
+      <a href="https://github.com/doom-snapmap/snapmap-plus">Source on GitHub</a>
+      <a href="https://github.com/doom-snapmap/snapmap-plus/blob/main/LICENSE">MIT License</a>
     </div>
     <div>
-      Snapmap+ is powered by <strong>SnapHak</strong> &mdash; an open-source recreation, built from our own
-      research, of the original SnapHak tool. Not affiliated with id Software or Bethesda.
+      Snapmap+ is an open-source recreation, built from our own research, of the original
+      <strong>SnapHak</strong> tool. Not affiliated with id Software or Bethesda.
       DOOM is a trademark of id Software LLC.
     </div>
   </div>
@@ -160,7 +160,7 @@
 // Resolve the newest release so the button downloads the exe directly and shows its version.
 // Falls back to the releases page (the static href) if the API is unreachable.
 (function () {
-  fetch("https://api.github.com/repos/snaphak/open-snaphak/releases")
+  fetch("https://api.github.com/repos/doom-snapmap/snapmap-plus/releases")
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (rels) {
       if (!rels || !rels.length) return;
@@ -176,7 +176,7 @@
       if (!pick) return;
       var asset = null;
       for (var k = 0; k < pick.assets.length; k++) {
-        if (pick.assets[k].name === "snaphak.exe") { asset = pick.assets[k]; break; }
+        if (pick.assets[k].name === "snapmap-plus.exe") { asset = pick.assets[k]; break; }
       }
       if (!asset) return;
       var links = document.querySelectorAll("[data-dl]");

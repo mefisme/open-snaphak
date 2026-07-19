@@ -18,7 +18,7 @@ var stdin = bufio.NewReader(os.Stdin)
 // notice, Enter updates. Either way it then drops into a command prompt, so update / uninstall /
 // changelog / status all work from a double-click -- no terminal or PATH needed.
 func interactiveMain() {
-	fmt.Println("SnapHak", version)
+	fmt.Println("Snapmap+", version)
 	fmt.Println()
 
 	rec, err := loadRecord()
@@ -26,9 +26,9 @@ func interactiveMain() {
 	installedVersion := ""
 	if installed {
 		installedVersion = rec.Version
-		fmt.Printf("Installed: SnapHak %s at %s\n", rec.Version, rec.DoomPath)
+		fmt.Printf("Installed: Snapmap+ %s at %s\n", rec.Version, rec.DoomPath)
 	} else {
-		fmt.Println("SnapHak is not installed yet.")
+		fmt.Println("Snapmap+ is not installed yet.")
 		if doom, derr := resolveDoom(""); derr == nil {
 			fmt.Printf("Found DOOM: %s\n", doom)
 		} else {
@@ -45,7 +45,7 @@ func interactiveMain() {
 	case "install":
 		fmt.Println("\nPress Enter to install now, or type a command (help lists them).")
 	case "update":
-		fmt.Printf("\nA new version of SnapHak is available: %s (you have %s).\n", latest, installedVersion)
+		fmt.Printf("\nA new version of Snapmap+ is available: %s (you have %s).\n", latest, installedVersion)
 		fmt.Println("Press Enter to update now, or type a command (help lists them).")
 	default:
 		if installed && latest != "" {
@@ -73,7 +73,7 @@ func enterDefault(installed bool, installedVersion, latestTag string) string {
 // (the pre-selected obvious action); after firing once, a bare Enter just re-prompts.
 func commandLoop(enterCmd string) {
 	for {
-		fmt.Print("\nsnaphak> ")
+		fmt.Print("\nsnapmap-plus> ")
 		line, ok := readLineEOF()
 		if !ok {
 			return // stdin closed (piped input ran out) -- never spin on EOF
@@ -138,7 +138,7 @@ func latestDefaultTag() string {
 	if err != nil {
 		return ""
 	}
-	req.Header.Set("User-Agent", "snaphak-installer")
+	req.Header.Set("User-Agent", "snapmap-plus-installer")
 	req.Header.Set("Accept", "application/vnd.github+json")
 	if t := resolveToken(flags{}); t != "" {
 		req.Header.Set("Authorization", "Bearer "+t)

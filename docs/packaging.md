@@ -9,7 +9,7 @@ gitignored (binaries are never committed).
 | File | Source | What |
 |---|---|---|
 | `XINPUT1_3.dll` | `build/` | the backend: XInput proxy + hook layer + cvar-unlock + fault-shield + the SnapStack subsystem (all merged in) |
-| `snaphak\snaphakui.dll` | `build/webview/` | the frontend: the "SnapHak Studio" UI, rendered in a Microsoft Edge **WebView2** control (HTML/CSS/JS), with the HTML embedded in the DLL |
+| `snapmap-plus\snapmap-plus-ui.dll` | `build/webview/` | the frontend: the Snapmap+ UI, rendered in a Microsoft Edge **WebView2** control (HTML/CSS/JS), with the HTML embedded in the DLL |
 
 Plus `MANIFEST.sha256` (the installer's file list + per-file hash verify). **Nothing else ships** — the
 frontend renders in the **system-installed WebView2 runtime** (preinstalled on Windows 11; the evergreen
@@ -21,19 +21,19 @@ runtime on most Windows 10), so there is no UI-toolkit runtime to bundle. The tw
 ```
 <DOOM install root>/            # the folder with DOOMx64vk.exe
 ├── XINPUT1_3.dll
-└── snaphak/
-    └── snaphakui.dll
+└── snapmap-plus/
+    └── snapmap-plus-ui.dll
 ```
 
-`dist/` mirrors this tree. The installer (`snaphak.exe`) — or a manual drop-in — merges it into the DOOM
-root. The "SnapHak Studio" window opens in the SnapMap editor (run `sh` in the console if it doesn't
+`dist/` mirrors this tree. The installer (`snapmap-plus.exe`) — or a manual drop-in — merges it into the DOOM
+root. The Snapmap+ window opens in the SnapMap editor (run `sh` in the console if it doesn't
 auto-open).
 
 ## The runtime dependency: WebView2
 
 The frontend renders in Microsoft's **WebView2 runtime** rather than bundling a UI toolkit. It's part of
 Windows 11 and is pushed to most Windows 10 machines via Microsoft Edge. On a machine that somehow lacks it, the
-Studio window can't render — so **`snaphak.exe` ensures it**: on `install` (and `update`) it checks the runtime's
+Snapmap+ window can't render — so **`snapmap-plus.exe` ensures it**: on `install` (and `update`) it checks the runtime's
 registry key and, if it's absent, offers to download + run Microsoft's evergreen bootstrapper (`/silent /install`;
 auto under `--yes`). This never blocks the mod install — the DLLs deploy regardless; on the common case
 (Win11 / updated Win10) the check is a no-op since the runtime is already present.
@@ -49,7 +49,7 @@ auto under `--yes`). This never blocks the mod install — the DLLs deploy regar
 ## Overrides are NOT shipped
 
 The bundle ships **no override decls** — those are per-user configuration. At runtime the tool reads your own
-from `%USERPROFILE%\snaphak\overrides\` (pure file-shadow data, e.g. to make extra editor entities placeable).
+from `%LOCALAPPDATA%\snapmap-plus\overrides\` (pure file-shadow data, e.g. to make extra editor entities placeable).
 Slot your own overrides there; the bundle provides none.
 
 ## Build-target anchor (portability)

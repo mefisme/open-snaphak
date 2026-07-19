@@ -15,7 +15,7 @@ func TestFormatChangelogNewestFullPlusLink(t *testing.T) {
 	newestBody := "Changes since v0.1.0:\n\n" + strings.Join(lines, "\n")
 	list := []ghRelease{
 		{TagName: "v0.2.0", Prerelease: true, PublishedAt: "2026-07-01T00:00:00Z", Body: newestBody,
-			HTMLURL: "https://github.com/snaphak/open-snaphak/releases/tag/v0.2.0"},
+			HTMLURL: "https://github.com/doom-snapmap/snapmap-plus/releases/tag/v0.2.0"},
 	}
 
 	out := formatChangelog(list, "v0.2.0")
@@ -28,7 +28,7 @@ func TestFormatChangelogNewestFullPlusLink(t *testing.T) {
 	if strings.Contains(out, "... full notes:") {
 		t.Error("the newest release must NOT truncate its notes")
 	}
-	if !strings.Contains(out, "Full notes: https://github.com/snaphak/open-snaphak/releases/tag/v0.2.0") {
+	if !strings.Contains(out, "Full notes: https://github.com/doom-snapmap/snapmap-plus/releases/tag/v0.2.0") {
 		t.Errorf("the newest release must also offer its full-notes link; got:\n%s", out)
 	}
 	if !strings.Contains(out, "Latest release: v0.2.0 (beta)") {
@@ -48,9 +48,9 @@ func TestFormatChangelogOlderPreviewAndTruncationLink(t *testing.T) {
 	}
 	list := []ghRelease{
 		{TagName: "v0.3.0", Prerelease: true, PublishedAt: "2026-07-05T00:00:00Z", Body: "- newest note",
-			HTMLURL: "https://github.com/snaphak/open-snaphak/releases/tag/v0.3.0"},
+			HTMLURL: "https://github.com/doom-snapmap/snapmap-plus/releases/tag/v0.3.0"},
 		{TagName: "v0.2.0", Prerelease: true, PublishedAt: "2026-07-01T00:00:00Z", Body: strings.Join(many, "\n"),
-			HTMLURL: "https://github.com/snaphak/open-snaphak/releases/tag/v0.2.0"},
+			HTMLURL: "https://github.com/doom-snapmap/snapmap-plus/releases/tag/v0.2.0"},
 	}
 
 	out := formatChangelog(list, "")
@@ -64,7 +64,7 @@ func TestFormatChangelogOlderPreviewAndTruncationLink(t *testing.T) {
 	if strings.Contains(out, "- old change "+itoa(changelogPreviewLines+1)) {
 		t.Errorf("older release should truncate after %d lines", changelogPreviewLines)
 	}
-	if !strings.Contains(out, "... full notes: https://github.com/snaphak/open-snaphak/releases/tag/v0.2.0") {
+	if !strings.Contains(out, "... full notes: https://github.com/doom-snapmap/snapmap-plus/releases/tag/v0.2.0") {
 		t.Errorf("older release should defer to a truncation link; got:\n%s", out)
 	}
 }
@@ -73,9 +73,9 @@ func TestFormatChangelogOlderPreviewAndTruncationLink(t *testing.T) {
 func TestFormatChangelogOlderShortNoTruncationLink(t *testing.T) {
 	list := []ghRelease{
 		{TagName: "v0.3.0", Prerelease: true, PublishedAt: "2026-07-05T00:00:00Z", Body: "- newest",
-			HTMLURL: "https://github.com/snaphak/open-snaphak/releases/tag/v0.3.0"},
+			HTMLURL: "https://github.com/doom-snapmap/snapmap-plus/releases/tag/v0.3.0"},
 		{TagName: "v0.2.0", Prerelease: true, PublishedAt: "2026-07-01T00:00:00Z", Body: "- a\n- b\n- c",
-			HTMLURL: "https://github.com/snaphak/open-snaphak/releases/tag/v0.2.0"},
+			HTMLURL: "https://github.com/doom-snapmap/snapmap-plus/releases/tag/v0.2.0"},
 	}
 
 	out := formatChangelog(list, "")
@@ -85,7 +85,7 @@ func TestFormatChangelogOlderShortNoTruncationLink(t *testing.T) {
 			t.Errorf("short older release should show all lines; missing %q", ln)
 		}
 	}
-	if strings.Contains(out, "... full notes: https://github.com/snaphak/open-snaphak/releases/tag/v0.2.0") {
+	if strings.Contains(out, "... full notes: https://github.com/doom-snapmap/snapmap-plus/releases/tag/v0.2.0") {
 		t.Error("a short older release should NOT have a truncation link")
 	}
 }
@@ -95,13 +95,13 @@ func TestFormatChangelogSingleRelease(t *testing.T) {
 	list := []ghRelease{
 		{TagName: "v0.1.0-beta.4", Prerelease: true, PublishedAt: "2026-07-01T12:34:56Z",
 			Body:    "Changes since v0.1.0-beta.3:\n\n- fix the changelog command",
-			HTMLURL: "https://github.com/snaphak/open-snaphak/releases/tag/v0.1.0-beta.4"},
+			HTMLURL: "https://github.com/doom-snapmap/snapmap-plus/releases/tag/v0.1.0-beta.4"},
 	}
 	out := formatChangelog(list, "")
 	if !strings.Contains(out, "- fix the changelog command") {
 		t.Errorf("full notes missing; got:\n%s", out)
 	}
-	if !strings.Contains(out, "Full notes: https://github.com/snaphak/open-snaphak/releases/tag/v0.1.0-beta.4") {
+	if !strings.Contains(out, "Full notes: https://github.com/doom-snapmap/snapmap-plus/releases/tag/v0.1.0-beta.4") {
 		t.Error("single release should still offer its full-notes link")
 	}
 	if strings.Contains(out, "Earlier releases:") {

@@ -8,15 +8,15 @@ import (
 	"testing"
 )
 
-// TestReplaceExeLockedOldFallsBack reproduces the field failure: snaphak.exe.old is a still-running old
+// TestReplaceExeLockedOldFallsBack reproduces the field failure: snapmap-plus.exe.old is a still-running old
 // image, which Windows will neither delete nor rename over. We simulate that lock with a handle opened
 // WITHOUT FILE_SHARE_DELETE. replaceExe must fall back to a free .old<N> aside name and still succeed.
 func TestReplaceExeLockedOldFallsBack(t *testing.T) {
 	tmp := t.TempDir()
-	path := filepath.Join(tmp, "snaphak.exe")
+	path := filepath.Join(tmp, "snapmap-plus.exe")
 	writeF(t, path, "CURRENT")
 	writeF(t, path+".old", "RUNNING-OLD-IMAGE")
-	newExe := filepath.Join(tmp, "new", "snaphak.exe")
+	newExe := filepath.Join(tmp, "new", "snapmap-plus.exe")
 	writeF(t, newExe, "NEW")
 
 	h, err := syscall.CreateFile(syscall.StringToUTF16Ptr(path+".old"),

@@ -24,7 +24,7 @@
 
 #include <stdint.h>
 #include "signatures.h"
-#include "snaphak_iface.h"
+#include "snapmap_plus_iface.h"
 
 /* Resolve the full apply-chain engine fns (entity-clone / struct-serialize / tree-render-json /
  * struct-deserialize / lexer ctor+parse / parse-node ctor+dtor / entity-def ctor+dtor / decl-source-rebuild

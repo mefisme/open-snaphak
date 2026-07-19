@@ -60,10 +60,10 @@ func ensureWebView2Runtime(f flags) {
 		fmt.Printf("WebView2 runtime: present (%s).\n", v)
 		return
 	}
-	fmt.Println("The SnapHak UI renders in Microsoft's Edge WebView2 runtime, which isn't installed on this machine.")
+	fmt.Println("The Snapmap+ UI renders in Microsoft's Edge WebView2 runtime, which isn't installed on this machine.")
 	if !f.yes && isInteractive() {
 		if !confirm("Install the WebView2 runtime now (a ~2 MB download from Microsoft)?") {
-			fmt.Println("Skipped -- SnapHak is installed, but its window won't appear until the runtime is present.")
+			fmt.Println("Skipped -- Snapmap+ is installed, but its window won't appear until the runtime is present.")
 			fmt.Println("Get it later from https://developer.microsoft.com/microsoft-edge/webview2/ (the \"Evergreen\" runtime).")
 			return
 		}
@@ -72,7 +72,7 @@ func ensureWebView2Runtime(f flags) {
 	}
 	if err := installWebView2Runtime(); err != nil {
 		fmt.Fprintf(os.Stderr, "  ! couldn't install the WebView2 runtime automatically (%v).\n", err)
-		fmt.Println("    SnapHak is installed. Get the runtime from https://developer.microsoft.com/microsoft-edge/webview2/")
+		fmt.Println("    Snapmap+ is installed. Get the runtime from https://developer.microsoft.com/microsoft-edge/webview2/")
 		fmt.Println("    (the \"Evergreen Standalone Installer\") and the UI will work on the next launch.")
 		return
 	}
@@ -106,7 +106,7 @@ func downloadTo(url, path string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "snaphak-installer")
+	req.Header.Set("User-Agent", "snapmap-plus-installer")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err

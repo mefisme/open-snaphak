@@ -11,7 +11,7 @@ import (
 // A DOOM folder that ran the original SnapHak (the closed-source tool this project supersedes) carries
 // its overlay: proxy DLLs at the game root (dinput8.dll -- a bundled console-unlock mod -- plus
 // XINPUT1_3.dll and two helper DLLs), a Qt UI runtime inside snaphak\, a Qt platform plugin, and two
-// text files. None of these are vanilla game files, and this SnapHak replaces all of them. Install
+// text files. None of these are vanilla game files, and Snapmap+ replaces all of them. Install
 // (and therefore update) removes them first: left in place they'd either be backed up as if they were
 // genuine game files (XINPUT1_3.dll -- uninstall would later "restore" a non-vanilla DLL) or linger
 // as dead files nothing loads (the helper DLLs, the Qt runtime).
@@ -35,9 +35,10 @@ var legacyMarkers = []string{
 }
 
 // legacyExtras: part of the original SnapHak's bundle, but too generic (or name-shared with our own
-// files) to prove anything alone. Removed only when a marker fired. XINPUT1_3.dll and
-// snaphak\snaphakui.dll are the original's versions of paths we also use -- removing them before the
-// copy loop keeps the backup logic from saving them as "genuine" pre-existing files.
+// files) to prove anything alone. Removed only when a marker fired. XINPUT1_3.dll is the original's
+// version of a path we still use (and snaphak\snaphakui.dll of a path our pre-rename releases used) --
+// removing them before the copy loop keeps the backup logic from saving them as "genuine" pre-existing
+// files.
 var legacyExtras = []string{
 	"dinput8.dll",
 	"changelog.txt",
@@ -46,7 +47,7 @@ var legacyExtras = []string{
 	filepath.Join("platforms", "qwindows.dll"), // some installs carry the Qt plugin here instead
 }
 
-// legacySharedBakRels: overlay-relative paths whose ".snaphak-bak" backup cannot be a genuine game
+// legacySharedBakRels: overlay-relative paths whose saved-aside backup cannot be a genuine game
 // file once the original SnapHak is confirmed present -- vanilla DOOM 2016 ships none of these paths,
 // so a pre-existing copy that an earlier install backed up was the original SnapHak's file, and
 // uninstall must NOT "restore" it.
@@ -81,9 +82,10 @@ func detectLegacy(doom string) []string {
 }
 
 // removeLegacy deletes the detected original-SnapHak files and prunes the Qt plugin dirs they leave
-// empty (never the snaphak\ dir itself -- our own UI lives there). Best-effort per file: a locked
-// file is reported and left behind; the shared-name files (XINPUT1_3.dll, snaphakui.dll) get
-// overwritten by the copy that follows anyway. Returns what was actually removed.
+// empty (the snaphak\ dir itself is left in place -- pre-rename releases of this project deployed
+// their UI there, and a user may keep other files in it). Best-effort per file: a locked file is
+// reported and left behind; the shared-name file (XINPUT1_3.dll) gets overwritten by the copy that
+// follows anyway. Returns what was actually removed.
 func removeLegacy(doom string, files []string) []string {
 	var removed []string
 	for _, rel := range files {

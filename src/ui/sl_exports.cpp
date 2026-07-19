@@ -7,7 +7,7 @@
  *
  * They ship as thin stubs (return 0 / empty) so the ABI EXPORT SURFACE is complete now; later work fills the
  * bodies (they call interface slots +0x28/+0x38/+0x60/+0x68/+0x1b8 -- the same object + store as `sh` and
- * the tabs). Exported by the OG names (undecorated C) via snaphakui.def.
+ * the tabs). Exported by the OG names (undecorated C) via snapmap-plus-ui.def.
  *
  * OG RVAs (for the C3 port): sl_is_valid_entityid 0x75cc, sl_get_entity_classname_impl 0x7588,
  * sl_get_entity_inherit_impl 0x7544, sl_get_entity_declsource_impl 0x7660, sl_show_toast_impl 0x75f8,
@@ -18,7 +18,7 @@
  */
 #include <cstdint>
 
-/* All exported undecorated (extern "C") so snaphakui.def lists the OG names verbatim. The stub signatures
+/* All exported undecorated (extern "C") so snapmap-plus-ui.def lists the OG names verbatim. The stub signatures
  * are the conservative widest shape (a pointer/int in, an int/pointer out); later work refines each to its real
  * SuperScript signature when the bodies land. Returning 0 / nullptr is the safe inert stub. */
 extern "C" {

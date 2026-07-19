@@ -15,10 +15,10 @@ import (
 )
 
 // repoSlug is the GitHub "owner/repo" the installer downloads releases from.
-const repoSlug = "snaphak/open-snaphak"
+const repoSlug = "doom-snapmap/snapmap-plus"
 
 // releaseAsset is the stable asset name CI publishes on every release (so latest/download works).
-const releaseAsset = "snaphak-bundle.zip"
+const releaseAsset = "snapmap-plus-bundle.zip"
 
 // bundle is a ready-to-deploy overlay tree (a dist/ dir) plus its MANIFEST.sha256 file list.
 type bundle struct {
@@ -28,7 +28,7 @@ type bundle struct {
 }
 
 type manifestEntry struct {
-	rel    string // overlay-relative path, e.g. "snaphak\snaphakui.dll"
+	rel    string // overlay-relative path, e.g. "snapmap-plus\snapmap-plus-ui.dll"
 	sha256 string
 }
 
@@ -60,7 +60,7 @@ func acquireBundle(f flags) (*bundle, func(), error) {
 func loadBundle(root string) (*bundle, error) {
 	f, err := os.Open(filepath.Join(root, "MANIFEST.sha256"))
 	if err != nil {
-		return nil, fmt.Errorf("%q isn't a SnapHak build folder (no MANIFEST.sha256) -- point --local at a dist/ folder built by package.ps1", root)
+		return nil, fmt.Errorf("%q isn't a Snapmap+ build folder (no MANIFEST.sha256) -- point --local at a dist/ folder built by package.ps1", root)
 	}
 	defer f.Close()
 
@@ -110,7 +110,7 @@ func fileSHA256(path string) (string, error) {
 
 // --- GitHub release resolution ------------------------------------------------------------------------
 // install/update download the release bundle from GitHub via the API. A PRIVATE repo (closed beta) needs a
-// token -- set once with `snaphak set-token <tok>`, or via SNAPHAK_TOKEN / --token; it also enables --beta.
+// token -- set once with `snapmap-plus set-token <tok>`, or via SNAPMAP_PLUS_TOKEN / --token; it also enables --beta.
 // When the repo is public, no token is needed.
 
 type ghRelease struct {
@@ -131,7 +131,7 @@ type ghAsset struct {
 }
 
 // downloadRelease resolves the requested release (stable / --beta pre-release / --release tag), downloads
-// its snaphak-bundle.zip asset (with the token if set), and extracts it into a temp dir.
+// its snapmap-plus-bundle.zip asset (with the token if set), and extracts it into a temp dir.
 func downloadRelease(f flags) (dir string, tag string, cleanup func(), err error) {
 	noop := func() {}
 	token := resolveToken(f)
@@ -151,7 +151,7 @@ func downloadRelease(f flags) (dir string, tag string, cleanup func(), err error
 		return "", "", noop, fmt.Errorf("release %s is missing its download -- it may still be publishing, so try again in a minute", rel.TagName)
 	}
 
-	tmp, err := os.MkdirTemp("", "snaphak-bundle-")
+	tmp, err := os.MkdirTemp("", "snapmap-plus-bundle-")
 	if err != nil {
 		return "", "", noop, err
 	}
@@ -233,7 +233,7 @@ func apiGet(url, token string, out interface{}) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "snaphak-installer")
+	req.Header.Set("User-Agent", "snapmap-plus-installer")
 	req.Header.Set("Accept", "application/vnd.github+json")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -253,12 +253,12 @@ func apiGet(url, token string, out interface{}) error {
 func friendlyHTTP(code int, token string) string {
 	switch code {
 	case http.StatusUnauthorized: // 401
-		return "your access token was rejected (401) -- double-check it with whoever gave it to you, then run: snaphak set-token <token>"
+		return "your access token was rejected (401) -- double-check it with whoever gave it to you, then run: snapmap-plus set-token <token>"
 	case http.StatusForbidden: // 403
 		return "GitHub denied or rate-limited the request (403) -- wait a few minutes and try again"
 	case http.StatusNotFound: // 404
 		if token == "" {
-			return "couldn't find the release (404) -- if no stable version has been released yet, run:  snaphak update --beta"
+			return "couldn't find the release (404) -- if no stable version has been released yet, run:  snapmap-plus update --beta"
 		}
 		return "release not found (404) -- check the version, or your token may not have access to this repository"
 	default:
@@ -277,7 +277,7 @@ func downloadAsset(a *ghAsset, token, dest string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "snaphak-installer")
+	req.Header.Set("User-Agent", "snapmap-plus-installer")
 	if accept != "" {
 		req.Header.Set("Accept", accept)
 	}
@@ -311,12 +311,12 @@ func tokenPath() (string, error) {
 	return filepath.Join(dir, "token"), nil
 }
 
-// resolveToken: --token flag > SNAPHAK_TOKEN env > the saved token file (new location, then the pre-rename one).
+// resolveToken: --token flag > SNAPMAP_PLUS_TOKEN env > the saved token file (new location, then the pre-rename one).
 func resolveToken(f flags) string {
 	if f.token != "" {
 		return f.token
 	}
-	if t := os.Getenv("SNAPHAK_TOKEN"); t != "" {
+	if t := os.Getenv("SNAPMAP_PLUS_TOKEN"); t != "" {
 		return t
 	}
 	if p, err := tokenPath(); err == nil {
@@ -336,20 +336,20 @@ func resolveToken(f flags) string {
 // cmdSetToken saves a GitHub token so install/update can pull from a private repo (closed beta).
 func cmdSetToken(args []string) error {
 	if len(args) < 1 || strings.TrimSpace(args[0]) == "" {
-		return fmt.Errorf("usage: snaphak set-token <github-token>")
+		return fmt.Errorf("usage: snapmap-plus set-token <github-token>")
 	}
-	selfInstall() // a tester's first command -> keep a stable copy of snaphak.exe
+	selfInstall() // a tester's first command -> keep a stable copy of snapmap-plus.exe
 	p, err := tokenPath()
 	if err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		return fmt.Errorf("couldn't create the SnapHak settings folder (%v)", err)
+		return fmt.Errorf("couldn't create the Snapmap+ settings folder (%v)", err)
 	}
 	if err := os.WriteFile(p, []byte(strings.TrimSpace(args[0])), 0o600); err != nil {
 		return fmt.Errorf("couldn't save your token (%v)", err)
 	}
-	fmt.Println("Token saved. You can now run:  snaphak update --beta")
+	fmt.Println("Token saved. You can now run:  snapmap-plus update --beta")
 	return nil
 }
 

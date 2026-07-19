@@ -1,4 +1,4 @@
-<!-- Thanks for contributing to open-snaphak! Keep each PR focused on a single change. -->
+<!-- Thanks for contributing to snapmap-plus! Keep each PR focused on a single change. -->
 
 ## What this changes
 
@@ -10,7 +10,7 @@
       original-SnapHak content is pasted into the repo.
 - [ ] No binaries added (`.dll` / `.exe` / `.obj` / `.pdb` / `.zip` ...) -- the source is the only deliverable.
 - [ ] Source stays pure ASCII (`.c` / `.h` / `.cpp` / `.ps1`).
-- [ ] Built + tested locally: `build.ps1` -> `package.ps1` -> `snaphak install --local dist`, and I ran the Go
+- [ ] Built + tested locally: `build.ps1` -> `package.ps1` -> `snapmap-plus install --local dist`, and I ran the Go
       (`gofmt` / `go vet` / `go test`) and C (`tests\run-tests.ps1`) suites, and confirmed it works in DOOM.
 - [ ] Docs updated in this PR for any behavior change (see `docs/contributing.md` section 9).
 

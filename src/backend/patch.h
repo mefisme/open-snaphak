@@ -1,4 +1,4 @@
-/* patch.h -- the SnapHak backend's reusable engine-code PATCH/DETOUR layer.
+/* patch.h -- the Snapmap+ backend's reusable engine-code PATCH/DETOUR layer.
  *
  * This is the SAFETY layer the upcoming engine-code-patch consumers ride on:
  *   [15][16] devmode  -- patch a hand-assembled code region at engine RVA 0x18a31d0 (memcpy-to-RX).

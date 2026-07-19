@@ -1,4 +1,4 @@
-/* smoke.h -- the foundation smoke proof for the SnapHak backend.
+/* smoke.h -- the foundation smoke proof for the Snapmap+ backend.
  *
  * Proves the two foundation pieces work end-to-end against the LIVE DOOM module, with a visible
  * signal an attached debugger captures (OutputDebugStringA via backend_log):

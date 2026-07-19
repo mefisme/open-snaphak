@@ -1,4 +1,4 @@
-/* signatures.h -- version-portable masked-byte engine-function resolver for the SnapHak BACKEND
+/* signatures.h -- version-portable masked-byte engine-function resolver for the Snapmap+ BACKEND
  * (our clean-room XINPUT1_3.dll). C port of the reference implementation's signature table.
  *
  * SnapHak hardcodes `engineBase + rva` (build-locked to its 2021 DOOM). We instead carry a masked

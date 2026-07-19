@@ -6,8 +6,8 @@
  * leaves the machine. Header-only, pure C (no OS calls), so the exact same code is unit-tested
  * off-game (tests/report_scrub_test.c) and compiled into the UI host.
  */
-#ifndef SNAPHAK_REPORT_SCRUB_H
-#define SNAPHAK_REPORT_SCRUB_H
+#ifndef SNAPMAP_PLUS_REPORT_SCRUB_H
+#define SNAPMAP_PLUS_REPORT_SCRUB_H
 
 #include <stddef.h>
 #include <string.h>
@@ -59,4 +59,4 @@ static size_t rs_tail_offset(const char *buf, size_t len, size_t keep)
     return off;
 }
 
-#endif /* SNAPHAK_REPORT_SCRUB_H */
+#endif /* SNAPMAP_PLUS_REPORT_SCRUB_H */

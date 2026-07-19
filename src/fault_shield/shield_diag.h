@@ -1,12 +1,12 @@
-/* shield_diag.h -- DIAGNOSTIC build hooks (compiled only when SNAPHAK_DIAG is defined).
+/* shield_diag.h -- DIAGNOSTIC build hooks (compiled only when SH_DIAG is defined).
  *
  * A catch-all crash + environment logger for diagnosing a remote end-user's crash that the recovery
  * shield's VEH does NOT trap (a fault outside DOOM's code, or a __fastfail/heap-corruption). LOG-ONLY:
  * it never alters control flow, so it cannot change crash behavior -- safe to ship to an end-user.
- * Writes snaphak_diag.log under <DOOM>\snaphak\logs\. See shield_diag.c.
+ * Writes sh_diag.log under <DOOM>\snapmap-plus\logs\. See shield_diag.c.
  */
-#ifndef SNAPHAK_SHIELD_DIAG_H
-#define SNAPHAK_SHIELD_DIAG_H
+#ifndef SNAPMAP_PLUS_SHIELD_DIAG_H
+#define SNAPMAP_PLUS_SHIELD_DIAG_H
 #include <windows.h>
 
 #ifdef __cplusplus
@@ -25,4 +25,4 @@ void shield_diag_detach(void);
 #ifdef __cplusplus
 }
 #endif
-#endif /* SNAPHAK_SHIELD_DIAG_H */
+#endif /* SNAPMAP_PLUS_SHIELD_DIAG_H */

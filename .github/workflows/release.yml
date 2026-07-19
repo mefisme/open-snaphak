@@ -3,7 +3,7 @@
 # Runs ONLY on a pushed tag v* -> it builds only reviewed code, and it is the sole place the publish token
 # lives (unreachable from a PR). Cut a release: `git tag v1.2.3 && git push origin v1.2.3`.
 # It builds the DLLs + the installer, assembles the overlay, and publishes a GitHub Release with the bundle
-# zip + snaphak.exe + install.ps1. (The release publishes to THIS repo via the github context -- no slug.)
+# zip + snapmap-plus.exe + install.ps1. (The release publishes to THIS repo via the github context -- no slug.)
 #
 # Every third-party action is pinned to a full commit SHA (immutable) with a version comment; Dependabot
 # (.github/dependabot.yml) proposes bumps as reviewable PRs. This workflow also attests the provenance of the
@@ -45,11 +45,11 @@ jobs:
           # build.ps1 embeds the Windows version resource + application manifest, strips symbols, and
           # trims local build paths (the free antivirus-false-positive mitigations), then stamps the tag.
           # Same recipe as a local dev build, so what ships is shaped exactly like what is tested.
-          .\build.ps1 -Version "${{ github.ref_name }}" -Out ..\dist\snaphak.exe
+          .\build.ps1 -Version "${{ github.ref_name }}" -Out ..\dist\snapmap-plus.exe
           if ($LASTEXITCODE -ne 0) { throw "installer build failed" }
 
       # --- Authenticode code signing slots in HERE (the strongest antivirus / SmartScreen lever) ---
-      # A signed dist\snaphak.exe (and, ideally, the two DLLs in dist\) clears the "unknown publisher"
+      # A signed dist\snapmap-plus.exe (and, ideally, the two DLLs in dist\) clears the "unknown publisher"
       # SmartScreen prompt and sharply lowers heuristic AV scores on the direct download. The signing
       # step is added once a signing identity is chosen + its credential is stored as a repo secret
       # (e.g. Azure Trusted Signing via azure/trusted-signing-action, or signtool with a PFX/EV token).
@@ -58,15 +58,15 @@ jobs:
       - name: Zip the overlay
         shell: pwsh
         run: |
-          # snaphak-bundle.zip = the lean overlay (2 DLLs) + MANIFEST.sha256 (the installer's --release download
-          # target). snaphak.exe is published as a SEPARATE asset, not bundled into the overlay zip.
-          Compress-Archive -Force -DestinationPath snaphak-bundle.zip `
-            -Path dist\XINPUT1_3.dll, dist\snaphak, dist\MANIFEST.sha256
+          # snapmap-plus-bundle.zip = the lean overlay (2 DLLs) + MANIFEST.sha256 (the installer's --release download
+          # target). snapmap-plus.exe is published as a SEPARATE asset, not bundled into the overlay zip.
+          Compress-Archive -Force -DestinationPath snapmap-plus-bundle.zip `
+            -Path dist\XINPUT1_3.dll, dist\snapmap-plus, dist\MANIFEST.sha256
       - name: Build the changelog from the commit log
         shell: bash
         run: |
           # The release BODY is the commit subjects since the previous version tag -- plain text, no links,
-          # so `snaphak changelog` can print it straight to the console (readable even while the repo is
+          # so `snapmap-plus changelog` can print it straight to the console (readable even while the repo is
           # private). GitHub's own generate_release_notes is PR-based; releases here are cut by tagging main
           # directly (no PRs), so it produces only a "Full Changelog" link -- not what we want.
           set -euo pipefail
@@ -94,20 +94,20 @@ jobs:
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           # Attest exactly what users download: the overlay bundle + the installer exe. A downloader can then
-          # verify origin with `gh attestation verify <file> --repo snaphak/open-snaphak`.
+          # verify origin with `gh attestation verify <file> --repo doom-snapmap/snapmap-plus`.
           subject-path: |
-            snaphak-bundle.zip
-            dist/snaphak.exe
+            snapmap-plus-bundle.zip
+            dist/snapmap-plus.exe
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           # A tag with a '-' (e.g. v0.3.0-beta.1) is a BETA pre-release: GitHub excludes it from "latest", so
-          # `snaphak update` (end users) never gets it; beta testers opt in via `snaphak install --release <tag>`.
+          # `snapmap-plus update` (end users) never gets it; beta testers opt in via `snapmap-plus install --release <tag>`.
           # A plain tag (v0.3.0) is the stable release end users update to.
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
-            snaphak-bundle.zip
-            dist/snaphak.exe
+            snapmap-plus-bundle.zip
+            dist/snapmap-plus.exe
             installer/install.ps1
           body_path: notes.md
 

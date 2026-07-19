@@ -42,22 +42,23 @@ static deser_fn_t g_deser_orig = NULL;   /* the trampoline -> the real engine De
 static volatile LONG g_gate = 0;
 static volatile LONG g_swap_count = 0;
 
-/* File-backed rawmap source. Default mirrors OG's path (%USERPROFILE%\snaphak\rawmap.json). The test
- * harness may override via sh_rawmap_swap_set_source. */
+/* File-backed rawmap source. Default %LOCALAPPDATA%\snapmap-plus\rawmap.json (the OG read
+ * %USERPROFILE%\snaphak\rawmap.json). The test harness may override via sh_rawmap_swap_set_source. */
 static char g_src_path[MAX_PATH] = {0};
 
 static void default_source_path(char *out, size_t cap)
 {
-    /* OG: SHGetFolderPathA(CSIDL_PROFILE) + "\snaphak\rawmap.json" (the shared path builder FUN_180023780). */
-    char profile[MAX_PATH];
-    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, profile)))
-        _snprintf_s(out, cap, _TRUNCATE, "%s\\snaphak\\rawmap.json", profile);
+    /* OG: SHGetFolderPathA(CSIDL_PROFILE) + "\snaphak\rawmap.json" (the shared path builder FUN_180023780);
+     * ours lives in the consolidated %LOCALAPPDATA%\snapmap-plus\ data root. */
+    char base[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, base)))
+        _snprintf_s(out, cap, _TRUNCATE, "%s\\snapmap-plus\\rawmap.json", base);
     else
-        _snprintf_s(out, cap, _TRUNCATE, "snaphak\\rawmap.json");
+        _snprintf_s(out, cap, _TRUNCATE, "snapmap-plus\\rawmap.json");
 }
 
 /* Resolve the EFFECTIVE rawmap source path (the same logic the swap reads from): g_src_path if set,
- * else the default %USERPROFILE%\snaphak\rawmap.json. Writes into `out` (caller-provided MAX_PATH buf).
+ * else the default %LOCALAPPDATA%\snapmap-plus\rawmap.json. Writes into `out` (caller-provided MAX_PATH buf).
  * Centralized so the flag-file path tracks set_source() exactly -- both derive from one resolver. */
 static void resolve_source_path(char *out, size_t cap)
 {
@@ -242,7 +243,7 @@ unsigned long sh_rawmap_swap_count(void)
  * Detours idSnapMap::SerializeToJson(idSnapMap* map, idStr* out, uint8 compact). On every save our detour
  * FIRST calls the engine ORIGINAL (via the trampoline) so the engine's own serializer fills the
  * out-idStr `out` -- the real save proceeds untouched -- and THEN reads out.len/out.data and mirrors those
- * bytes to %USERPROFILE%\snaphak\rawmap.json. The just-saved map thus becomes a reusable rawmap (the
+ * bytes to %LOCALAPPDATA%\snapmap-plus\rawmap.json. The just-saved map thus becomes a reusable rawmap (the
  * inverse of the LOAD swap, which substitutes rawmap.json INTO a load). See the header for the full RE.
  *
  * Why this is safe to slot in front of the engine fn: the detour has the EXACT prototype of the target
@@ -287,18 +288,20 @@ static serialize_fn_t g_ser_orig = NULL;   /* the trampoline -> the real engine 
 static volatile LONG     g_shadow_count = 0;
 static volatile LONGLONG g_last_bytes   = 0;
 
-/* Shadow destination. Default mirrors OG's path + the LOAD swap's source (%USERPROFILE%\snaphak\rawmap.json)
- * so a save-then-load round-trips OG-faithfully. The test harness may override via sh_rawmap_save_set_dest. */
+/* Shadow destination. Default matches the LOAD swap's source (%LOCALAPPDATA%\snapmap-plus\rawmap.json)
+ * so a save-then-load round-trips (the OG mirrored to %USERPROFILE%\snaphak\rawmap.json). The test
+ * harness may override via sh_rawmap_save_set_dest. */
 static char g_dest_path[MAX_PATH] = {0};
 
 static void default_dest_path(char *out, size_t cap)
 {
-    /* OG: SHGetFolderPathA(CSIDL_PROFILE) + "\snaphak\rawmap.json" (the shared path builder FUN_180023780). */
-    char profile[MAX_PATH];
-    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, profile)))
-        _snprintf_s(out, cap, _TRUNCATE, "%s\\snaphak\\rawmap.json", profile);
+    /* OG: SHGetFolderPathA(CSIDL_PROFILE) + "\snaphak\rawmap.json" (the shared path builder FUN_180023780);
+     * ours lives in the consolidated %LOCALAPPDATA%\snapmap-plus\ data root. */
+    char base[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, base)))
+        _snprintf_s(out, cap, _TRUNCATE, "%s\\snapmap-plus\\rawmap.json", base);
     else
-        _snprintf_s(out, cap, _TRUNCATE, "snaphak\\rawmap.json");
+        _snprintf_s(out, cap, _TRUNCATE, "snapmap-plus\\rawmap.json");
 }
 
 static void resolve_dest_path(char *out, size_t cap)

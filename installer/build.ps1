@@ -1,4 +1,4 @@
-# installer/build.ps1 -- build snaphak.exe with an embedded Windows version resource + application
+# installer/build.ps1 -- build snapmap-plus.exe with an embedded Windows version resource + application
 # manifest, symbol-stripped and path-trimmed. ONE recipe for both local dev and the release pipeline
 # (release.yml calls this with the tag), so the installer users download is byte-shaped the same way
 # it is tested. Pure ASCII (PS 5.1 reads BOM-less UTF-8 as 1252).
@@ -15,12 +15,12 @@
 # go.mod stays stdlib-only, no go.sum. resource.syso is git-ignored and regenerated on every build.
 #
 # Usage:
-#   powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1                       # dev build -> installer\snaphak.exe (version "dev")
+#   powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1                       # dev build -> installer\snapmap-plus.exe (version "dev")
 #   powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 -Version v1.2.3        # stamped
-#   powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 -Version v1.2.3 -Out ..\dist\snaphak.exe
+#   powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 -Version v1.2.3 -Out ..\dist\snapmap-plus.exe
 param(
     [string]$Version = "dev",
-    [string]$Out = "snaphak.exe"
+    [string]$Out = "snapmap-plus.exe"
 )
 $ErrorActionPreference = "Stop"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -44,7 +44,7 @@ try {
     # resource.syso = version resource (StringFileInfo from versioninfo.json, numeric/string version from
     # the tag) + the application manifest. Go auto-embeds any *.syso in the package dir at build time.
     & $gvi -64 -o resource.syso `
-        -manifest snaphak.manifest `
+        -manifest snapmap-plus.manifest `
         -file-version $Version -product-version $Version `
         -ver-major $maj -ver-minor $min -ver-patch $pat `
         -product-ver-major $maj -product-ver-minor $min -product-ver-patch $pat `

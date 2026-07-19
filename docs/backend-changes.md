@@ -72,7 +72,7 @@ port of the handler + the byte-exact prefab template) but not live-verified** �
 palette — the clone can't fabricate one directly), so the fresh entity records *that* as its `inherit`. A
 map saved with it only reloads where our override is installed — not portable. The normalize rewrites the
 inherit to the portable `snapmaps/unknown`; it lives in the backend vtable slot **`+0x298`
-`normalize_timeline_inherit`** (`snaphak_iface.h`/`.c`, `apply_engine.c` `slot_normalize_timeline_inherit`,
+`normalize_timeline_inherit`** (`snapmap_plus_iface.h`/`.c`, `apply_engine.c` `slot_normalize_timeline_inherit`,
 exported via `sh_apply_engine_get_slots`), and the frontend calls it from
 its Timeline rescan.
 
@@ -149,7 +149,7 @@ the reflection context it needs is a process-global singleton (engine `0x17f7030
 reachable from any thread — OG proves it by committing on exactly that thread.
 
 **Fix — a synchronous inline apply slot, `+0x290` (`apply_sync`).** Added to the matched-pair vtable ABI
-(`snaphak_iface.h`/`.c`, `apply_engine.c` `slot_apply_sync`, exported via `sh_apply_engine_get_slots` and
+(`snapmap_plus_iface.h`/`.c`, `apply_engine.c` `slot_apply_sync`, exported via `sh_apply_engine_get_slots` and
 folded in by `iface_engine.c`). It runs the same per-item batch as the `clone_bss_apply` drain
 (kind 0 = decl edit / 1 = mkcmd / 3 = target-write) but **inline on the calling UI thread**, so serialize +
 commit are atomic and the committed block has a single clean owner — OG's exact flow. Because the commit
@@ -346,7 +346,7 @@ it from DOOM's main thread and then immediately (same thread, no yield) calling 
 before that thread ever gets to pump the message that would complete the focus switch — so the
 keystroke landed nowhere. **Fix attempt 2:** moved the whole window-find + focus + `SendInput`
 sequence out of `apply_engine.c` entirely and into the webview UI's own think-loop
-(`poc_synthesize_native_paste` in `snaphak_ui_webview.cpp`), which has its own message pump and isn't
+(`poc_synthesize_native_paste` in `snapmap_plus_ui_webview.cpp`), which has its own message pump and isn't
 blocking DOOM's simulation. Also deliberately delayed ~6 loop iterations (~200ms) after a successful
 schedule, plus a 50ms sleep between the focus request and the keystroke, so the engine's command-buffer
 drain has actually staged the prefab, and the focus change has actually landed, before Ctrl+V fires.

@@ -9,17 +9,17 @@ void backend_set_logpath_from_module(HINSTANCE self)
 {
     char path[MAX_PATH];
     DWORD len = GetModuleFileNameA((HMODULE)self, path, MAX_PATH);
-    if (len == 0 || len >= MAX_PATH) { strcpy_s(g_logpath, MAX_PATH, "snaphak_backend.log"); return; }
+    if (len == 0 || len >= MAX_PATH) { strcpy_s(g_logpath, MAX_PATH, "sh_backend.log"); return; }
     char *slash = strrchr(path, '\\');
     if (slash) *(slash + 1) = '\0'; else path[0] = '\0';
-    /* keep the DOOM install dir clean: group all logs under <DOOM>\snaphak\logs\ (parent first --
+    /* keep the DOOM install dir clean: group all logs under <DOOM>\snapmap-plus\logs\ (parent first --
      * CreateDirectory makes one level at a time; both calls idempotent) */
     char dir[MAX_PATH];
-    _snprintf_s(dir, MAX_PATH, _TRUNCATE, "%ssnaphak", path);
+    _snprintf_s(dir, MAX_PATH, _TRUNCATE, "%ssnapmap-plus", path);
     CreateDirectoryA(dir, NULL);
-    _snprintf_s(dir, MAX_PATH, _TRUNCATE, "%ssnaphak\\logs", path);
+    _snprintf_s(dir, MAX_PATH, _TRUNCATE, "%ssnapmap-plus\\logs", path);
     CreateDirectoryA(dir, NULL);
-    _snprintf_s(g_logpath, MAX_PATH, _TRUNCATE, "%s\\snaphak_backend.log", dir);
+    _snprintf_s(g_logpath, MAX_PATH, _TRUNCATE, "%s\\sh_backend.log", dir);
 }
 
 void backend_log(const char *msg)
@@ -28,7 +28,7 @@ void backend_log(const char *msg)
     SYSTEMTIME st;
     GetLocalTime(&st);
     _snprintf_s(line, sizeof line, _TRUNCATE,
-        "[snaphak] %04d-%02d-%02d %02d:%02d:%02d.%03d %s\n",
+        "[snapmap+] %04d-%02d-%02d %02d:%02d:%02d.%03d %s\n",
         st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
         msg ? msg : "");
 

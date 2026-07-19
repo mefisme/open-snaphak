@@ -26,7 +26,7 @@ func sameFile(a, b string) bool {
 	return ea == nil && eb == nil && os.SameFile(sa, sb)
 }
 
-// selfInstall copies the running snaphak.exe into appDataDir, so a hand-delivered exe lives in a stable place
+// selfInstall copies the running installer exe into appDataDir, so a hand-delivered exe lives in a stable place
 // (survives a Downloads cleanup; can be added to PATH). No-op if it's already running from there. Best-effort:
 // any failure is silent -- the tool still works from wherever it was launched.
 func selfInstall() {
@@ -52,7 +52,7 @@ func selfInstall() {
 		return
 	}
 	if existed != nil { // first time -> let the user know where it went
-		fmt.Printf("(snaphak is now installed at %s -- run it from there in future, or add that folder to your PATH)\n", target)
+		fmt.Printf("(snapmap-plus is now installed at %s -- run it from there in future, or add that folder to your PATH)\n", target)
 	}
 }
 

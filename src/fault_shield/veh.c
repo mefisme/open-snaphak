@@ -68,7 +68,7 @@ static char g_crashstk[512];
 
 /* ---- FIRST-CHANCE CRASH LOGGER (crash-forensics: name a death the recovery paths never touch) --------
  * The recovery logic below only ACTS on AVs/HW-faults whose rip is INSIDE DOOM; it CONTINUE_SEARCHes every
- * other first-chance exception -- a crash-class fault in a NON-DOOM module (the SnapHak UI DLL, a backend
+ * other first-chance exception -- a crash-class fault in a NON-DOOM module (the Snapmap+ UI DLL, a backend
  * detour, a system/runtime DLL) or a fastfail/heap-stop -- so those deaths left NO shield trace and an attached debugger saw
  * only a bare process-terminated. This LOG-ONLY block records ANY crash-class first-chance exception in ANY
  * module (code + name + rip + module+offset + fault addr), rate-limited + immediate-flush, then falls through
@@ -638,7 +638,7 @@ static LONG CALLBACK shield_veh(PEXCEPTION_POINTERS ep)
     shield_emit(&f);
 
     /* CRASH DETAIL + CRASH RECORD: capture the faulting call stack, log it (the citable record), and
-     * write a crash record -- the SnapHak Studio UI polls for it and raises the styled crash-report
+     * write a crash record -- the Snapmap+ UI polls for it and raises the styled crash-report
      * dialog seconds later (the process survives a Class-B fault, so the dialog can be real UI; the
      * blocking native message box this replaced parked the faulting thread and could only ever say
      * "look at the log"). Rate-limited (SHIELD_MAX_POPUP) so a per-frame fault can't spam; SEH-guarded
@@ -654,7 +654,7 @@ static LONG CALLBACK shield_veh(PEXCEPTION_POINTERS ep)
                               g_crashstk, "", "");
             /* FREE THE MOUSE: DOOM clips the cursor to its window + hides it (captured input); un-clip +
              * force it visible (ShowCursor is a refcount -- bounded loop) so the user can actually reach
-             * the SnapHak Studio window where the crash dialog appears. */
+             * the Snapmap+ window where the crash dialog appears. */
             ClipCursor(NULL);
             { int cc = 0; while (ShowCursor(TRUE) < 0 && ++cc < 32) {} }
         } __except (EXCEPTION_EXECUTE_HANDLER) {}

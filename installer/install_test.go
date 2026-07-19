@@ -10,7 +10,7 @@ import (
 
 // TestInstallUninstallRoundTrip exercises install -> uninstall against a synthetic bundle + fake DOOM dir.
 // Fully hermetic (no real DOOM, no network): it verifies the overlay deploys, a pre-existing file is backed
-// up, a legacy root-level snaphak_logs/ is migrated into snaphak/logs/ on install, and uninstall restores
+// up, a legacy root-level snaphak_logs/ is migrated into snapmap-plus/logs/ on install, and uninstall restores
 // the original + removes everything it placed (including the runtime-logs dir).
 func TestInstallUninstallRoundTrip(t *testing.T) {
 	tmp := t.TempDir()
@@ -23,14 +23,14 @@ func TestInstallUninstallRoundTrip(t *testing.T) {
 	writeF(t, filepath.Join(doom, "DOOMx64vk.exe"), "exe")
 	writeF(t, filepath.Join(doom, "XINPUT1_3.dll"), "ORIGINAL")
 
-	// a legacy root-level logs dir from an older install -- install must fold it into snaphak\logs\
+	// a legacy root-level logs dir from an older install -- install must fold it into snapmap-plus\logs\
 	writeF(t, filepath.Join(doom, "snaphak_logs", "old_backend.log"), "old log")
 
 	// a synthetic dist with a MANIFEST.sha256 (matches package.ps1's "hash  relpath" format)
 	overlay := map[string]string{
 		"XINPUT1_3.dll": "backend",
-		filepath.Join("snaphak", "snaphakui.dll"):  "ui",
-		filepath.Join("platforms", "qwindows.dll"): "qt",
+		filepath.Join("snapmap-plus", "snapmap-plus-ui.dll"): "ui",
+		filepath.Join("platforms", "qwindows.dll"):           "qt",
 	}
 	manifest := ""
 	for rel, content := range overlay {
@@ -43,13 +43,13 @@ func TestInstallUninstallRoundTrip(t *testing.T) {
 	if err := cmdInstall(flags{doom: doom, local: dist}); err != nil {
 		t.Fatalf("install: %v", err)
 	}
-	if !exists(filepath.Join(doom, "XINPUT1_3.dll.snaphak-bak")) {
+	if !exists(filepath.Join(doom, "XINPUT1_3.dll.snapmap-plus-bak")) {
 		t.Error("expected a backup of the pre-existing XINPUT1_3.dll")
 	}
 	if got := readF(t, filepath.Join(doom, "XINPUT1_3.dll")); got != "backend" {
 		t.Errorf("deployed XINPUT1_3.dll = %q, want %q", got, "backend")
 	}
-	if got := readF(t, filepath.Join(doom, "snaphak", "logs", "old_backend.log")); got != "old log" {
+	if got := readF(t, filepath.Join(doom, "snapmap-plus", "logs", "old_backend.log")); got != "old log" {
 		t.Errorf("legacy log migrated = %q, want %q", got, "old log")
 	}
 	if exists(filepath.Join(doom, "snaphak_logs")) {
@@ -57,7 +57,7 @@ func TestInstallUninstallRoundTrip(t *testing.T) {
 	}
 
 	// simulate runtime logs written since install that uninstall must clean
-	writeF(t, filepath.Join(doom, "snaphak", "logs", "snaphak_backend.log"), "log")
+	writeF(t, filepath.Join(doom, "snapmap-plus", "logs", "sh_backend.log"), "log")
 
 	if err := cmdUninstall(flags{}); err != nil {
 		t.Fatalf("uninstall: %v", err)
@@ -65,28 +65,28 @@ func TestInstallUninstallRoundTrip(t *testing.T) {
 	if got := readF(t, filepath.Join(doom, "XINPUT1_3.dll")); got != "ORIGINAL" {
 		t.Errorf("after uninstall XINPUT1_3.dll = %q, want the restored %q", got, "ORIGINAL")
 	}
-	for _, p := range []string{"snaphak", "platforms", "XINPUT1_3.dll.snaphak-bak"} {
+	for _, p := range []string{"snapmap-plus", "platforms", "XINPUT1_3.dll.snapmap-plus-bak"} {
 		if exists(filepath.Join(doom, p)) {
 			t.Errorf("expected %q removed after uninstall", p)
 		}
 	}
 }
 
-// TestMigrateLegacyLogs covers the legacy snaphak_logs -> snaphak\logs fold directly (the round-trip test
-// exercises it via cmdInstall too, but that path refuses while a real DOOM runs on the dev box -- this one
-// always runs).
+// TestMigrateLegacyLogs covers the legacy snaphak_logs -> snapmap-plus\logs fold directly (the round-trip
+// test exercises it via cmdInstall too, but that path refuses while a real DOOM runs on the dev box -- this
+// one always runs).
 func TestMigrateLegacyLogs(t *testing.T) {
 	tmp := t.TempDir()
 	doom := filepath.Join(tmp, "DOOM")
 	writeF(t, filepath.Join(doom, "snaphak_logs", "a.log"), "A")
 	writeF(t, filepath.Join(doom, "snaphak_logs", "b.log"), "B")
 	// a name collision: the new location already has b.log -> keep the new one, leave the old copy behind
-	writeF(t, filepath.Join(doom, "snaphak", "logs", "b.log"), "NEW")
+	writeF(t, filepath.Join(doom, "snapmap-plus", "logs", "b.log"), "NEW")
 	migrateLegacyLogs(doom)
-	if got := readF(t, filepath.Join(doom, "snaphak", "logs", "a.log")); got != "A" {
+	if got := readF(t, filepath.Join(doom, "snapmap-plus", "logs", "a.log")); got != "A" {
 		t.Errorf("migrated a.log = %q, want %q", got, "A")
 	}
-	if got := readF(t, filepath.Join(doom, "snaphak", "logs", "b.log")); got != "NEW" {
+	if got := readF(t, filepath.Join(doom, "snapmap-plus", "logs", "b.log")); got != "NEW" {
 		t.Errorf("colliding b.log = %q, want the pre-existing %q kept", got, "NEW")
 	}
 	if !exists(filepath.Join(doom, "snaphak_logs", "b.log")) {
@@ -99,7 +99,7 @@ func TestMigrateLegacyLogs(t *testing.T) {
 	if exists(filepath.Join(doom2, "snaphak_logs")) {
 		t.Error("emptied legacy dir should be removed after a full migration")
 	}
-	if got := readF(t, filepath.Join(doom2, "snaphak", "logs", "only.log")); got != "x" {
+	if got := readF(t, filepath.Join(doom2, "snapmap-plus", "logs", "only.log")); got != "x" {
 		t.Errorf("migrated only.log = %q, want %q", got, "x")
 	}
 }
@@ -118,13 +118,13 @@ func TestUpdateDoesNotBackUpOwnDLL(t *testing.T) {
 	if err := cmdInstall(flags{doom: doom, local: synthDist(t, tmp, "v1")}); err != nil {
 		t.Fatalf("install v1: %v", err)
 	}
-	if exists(filepath.Join(doom, "XINPUT1_3.dll.snaphak-bak")) {
+	if exists(filepath.Join(doom, "XINPUT1_3.dll.snapmap-plus-bak")) {
 		t.Fatal("fresh install into a clean dir must not create a backup (there was no genuine file)")
 	}
 	if err := cmdInstall(flags{doom: doom, local: synthDist(t, tmp, "v2")}); err != nil { // an update
 		t.Fatalf("update: %v", err)
 	}
-	if exists(filepath.Join(doom, "XINPUT1_3.dll.snaphak-bak")) {
+	if exists(filepath.Join(doom, "XINPUT1_3.dll.snapmap-plus-bak")) {
 		t.Error("update must not back up our own previously-installed DLL")
 	}
 	if err := cmdUninstall(flags{}); err != nil {
@@ -142,8 +142,8 @@ func synthDist(t *testing.T, dir, tag string) string {
 	dist := filepath.Join(dir, "dist-"+tag)
 	overlay := map[string]string{
 		"XINPUT1_3.dll": "backend-" + tag,
-		filepath.Join("snaphak", "snaphakui.dll"):  "ui-" + tag,
-		filepath.Join("platforms", "qwindows.dll"): "qt-" + tag,
+		filepath.Join("snapmap-plus", "snapmap-plus-ui.dll"): "ui-" + tag,
+		filepath.Join("platforms", "qwindows.dll"):           "qt-" + tag,
 	}
 	manifest := ""
 	for rel, content := range overlay {

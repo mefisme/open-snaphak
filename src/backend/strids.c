@@ -1,7 +1,7 @@
 /* strids.c -- see strids.h. The custom #str_ string injector (port of OG FUN_18000FF10 +
  * FUN_1800102e0).
  *
- * On the first top-level engine idLangDict sort, we load %USERPROFILE%\snaphak\strings\strids.json,
+ * On the first top-level engine idLangDict sort, we load %LOCALAPPDATA%\snapmap-plus\strings\strids.json,
  * parse its flat {id: text} object, and for each row append a 32-byte idLangDict entry to the live
  * string table (the same record + the same engine fns the engine's own lang loader uses), then let the
  * real sort run so our rows sort into place. Every later call (incl. the sort's own recursion) passes
@@ -61,16 +61,17 @@ static volatile LONG g_injected      = 0;      /* one-shot latch (0 = not yet in
 static volatile LONG g_in_sort       = 0;      /* recursion guard (>0 = inside the sort already) */
 static volatile LONG g_inject_count  = 0;      /* rows appended (observability) */
 
-/* strids.json source. Default mirrors OG's path (%USERPROFILE%\snaphak\strings\strids.json). */
+/* strids.json source. Default %LOCALAPPDATA%\snapmap-plus\strings\strids.json (the OG read
+ * %USERPROFILE%\snaphak\strings\strids.json). */
 static char g_src_path[MAX_PATH] = {0};
 
 static void default_source_path(char *out, size_t cap)
 {
-    char profile[MAX_PATH];
-    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, profile)))
-        _snprintf_s(out, cap, _TRUNCATE, "%s\\snaphak\\strings\\strids.json", profile);
+    char base[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, base)))
+        _snprintf_s(out, cap, _TRUNCATE, "%s\\snapmap-plus\\strings\\strids.json", base);
     else
-        _snprintf_s(out, cap, _TRUNCATE, "snaphak\\strings\\strids.json");
+        _snprintf_s(out, cap, _TRUNCATE, "snapmap-plus\\strings\\strids.json");
 }
 
 /* ----------------------------------------------------------------- table-global LEA decode --------

@@ -10,8 +10,8 @@ Registered with the engine command system; run from the DOOM console.
 
 | Command | What it does |
 |---|---|
-| `snapHak_rawmaps_on` | Enable raw map save/load (the `rawmap.json` substitution). |
-| `snapHak_rawmaps_off` | Disable raw map save/load. |
+| `sh_rawmaps_on` | Enable raw map save/load (the `rawmap.json` substitution). |
+| `sh_rawmaps_off` | Disable raw map save/load. |
 | `sh` | The SnapStack dispatcher — routes the 20 SnapStack subcommands (below). |
 | `sh_spawn` | Spawn `<entitydef> <name>` at the player and teleport to it. |
 | `sh_dumpdef` | Print (and copy to clipboard) an existing entity's resolved entity definition. |
@@ -26,14 +26,14 @@ Registered with the engine command system; run from the DOOM console.
 | `sh_genmd6model` | Compile a `.md6model` into a `bmd6model`. |
 | `sh_debugrender` | Renderer debug toggle (developer tool). |
 | `sh_alginfo` | Report the math-acceleration status. |
-| `sh_help` | List every SnapHak console command and cvar with its description in one place. |
+| `sh_help` | List every Snapmap+ console command and cvar with its description in one place. |
 | `sh_superscriptop` | Dump SuperScript / eventDef data (e.g. emit the eventDef table as a header). |
 | `cs_dumpeventdefs` | Dump all eventDefs to a file. |
 | `cs_fieldinfo` | Print field info for a type (developer tool). |
 | `cs_dontuse` | Toggle the higher-precision engine-math overrides (a precision/perf tradeoff; off by default). |
 | `cs_start_render_logging` | Set up the render-logging hook. |
-| `snaphak_disable_devmode` | Turn developer features off while keeping Bethesda.net connectivity. |
-| `snaphak_reenable_devmode` | Turn developer features back on. |
+| `sh_disable_devmode` | Turn developer features off while keeping Bethesda.net connectivity. |
+| `sh_reenable_devmode` | Turn developer features back on. |
 | `noClip` / `infiniteHealth` / `noPlayerDeath` / `noPlayerKill` / `noTarget` | The five player-cheat toggles for the local player: no-collision flight, infinite health, can't die, can't be killed, enemies ignore you. |
 
 ## Cvars
@@ -42,10 +42,10 @@ Console variables; defaults shown in parentheses.
 
 | Cvar | What it does |
 |---|---|
-| `snaphak_copy_reslist_to_clipboard` (0) | Copy `sh_listres` output to the clipboard. |
-| `snaphak_pretty_on` (0) | Pretty-print saved rawmap JSON. |
-| `snaphak_show_rmcount` (0) | Draw the current number of active rendermodels. |
-| `snaphak_user_overrides` (1) | When 0, your override files under `%USERPROFILE%\snaphak\overrides\` are ignored (built-in defaults and the game's own resources serve instead) — the bisect lever for a broken override set. Affects resources opened after the change; for boot-time coverage, rename the `overrides` folder instead. |
+| `sh_copy_reslist_to_clipboard` (0) | Copy `sh_listres` output to the clipboard. |
+| `sh_pretty_on` (0) | Pretty-print saved rawmap JSON. |
+| `sh_show_rmcount` (0) | Draw the current number of active rendermodels. |
+| `sh_user_overrides` (1) | When 0, your override files under `%LOCALAPPDATA%\snapmap-plus\overrides\` are ignored (built-in defaults and the game's own resources serve instead) — the bisect lever for a broken override set. Affects resources opened after the change; for boot-time coverage, rename the `overrides` folder instead. |
 | `cs_dash_direction_multiplier` (1.0) | Scale dash direction. |
 | `cs_dash_ground_velocity_multiplier` (2.0) | Scale dash direction when on the ground. |
 | `cs_dash_time_seconds` (0.5) | Time period over which the dash is applied. |
@@ -101,14 +101,14 @@ goes to the `~` console with a summary toast.
 
 ## The Studio window
 
-The "SnapHak Studio" window — HTML/CSS/JS rendered in a WebView2 control, opened inside the SnapMap
+The Snapmap+ window — HTML/CSS/JS rendered in a WebView2 control, opened inside the SnapMap
 editor (run `sh` in the console if it doesn't auto-open). Full detail: [`webview-ui.md`](webview-ui.md).
 
 | Surface | What it does |
 |---|---|
 | Window shell | The Win32 host window + the manual 30 Hz think-loop; a menu bar with a light/dark theme toggle; the always-visible Camera-Origin bar (X/Y/Z track the live editor camera; "Lock Position" pins it). |
 | Entities tab | A filterable entity list (multi-select, a hidden-entity toggle, two-way editor-selection sync; right-click for Copy ID / Delete / Push to stack 0 / Clear stack 0) plus the Entity State panel: classname / inherit / displayname fields and the Decl Text editor — line numbers, syntax coloring, structural lint, advisory schema checks, a distraction-free focus mode. "Save to Decl" commits the edits in memory. |
-| Prefabs tab | Save and load selection prefabs as JSON files under `%USERPROFILE%\snaphak\prefabs\` — one folder level with rename/delete/drag-between-folders; per-prefab description + tags (stored in a `<name>.meta.json` sidecar; the filter box matches tags across folders); "Load / Place" stages the prefab and the user pastes it with Ctrl+V. |
+| Prefabs tab | Save and load selection prefabs as JSON files under `%LOCALAPPDATA%\snapmap-plus\prefabs\` — one folder level with rename/delete/drag-between-folders; per-prefab description + tags (stored in a `<name>.meta.json` sidecar; the filter box matches tags across folders); "Load / Place" stages the prefab and the user pastes it with Ctrl+V. |
 | Timelines tab | The list of timeline entities; opening one edits its events and per-event parameters, with reference/decl/enum parameters constrained to valid choices, entity pickers for entity-typed args, and per-event documentation. |
 | Feedback ("?") | The "?" button at the statusbar's right edge opens the Send-feedback dialog: category (bug / feature / incorrect info / other), title, details, optional contact. Sending files it as a labeled issue on this repo's tracker — no GitHub account needed. See the network note below + [`feedback.md`](feedback.md). |
 | Crash reports | When the game hits a serious fault, a crash record is saved locally and the crash-report dialog auto-opens (in-session for a survived fault, next launch otherwise): the error + call stack, an optional description, and an opt-out checkbox to attach anonymized log tails. Sending files a `crash`-labeled issue; repeat crashes at the same location group onto one issue. See [`feedback.md`](feedback.md). |
@@ -123,7 +123,7 @@ tracker. A crash report can additionally attach the tails of the local log files
 "Attach recent logs" box is checked, and the text is anonymized first (account / profile / machine
 names scrubbed — see [`feedback.md`](feedback.md)); the local crash dump is never uploaded. Nothing is
 downloaded, nothing runs in the background, and nothing else is ever sent. (The installer
-separately talks to GitHub Releases for `snaphak update`, and to Microsoft's bootstrapper if the
+separately talks to GitHub Releases for `snapmap-plus update`, and to Microsoft's bootstrapper if the
 WebView2 runtime is missing — both documented in [`packaging.md`](packaging.md).)
 
 ## Hook behaviors
@@ -132,10 +132,10 @@ Engine detours and resource-loader shadows the backend installs.
 
 | Hook | What it does |
 |---|---|
-| Rawmap load | When rawmaps are on, load the map from `%USERPROFILE%\snaphak\rawmap.json` instead of the engine's own save. |
-| Rawmap save | On every editor save, mirror the serialized map JSON to `%USERPROFILE%\snaphak\rawmap.json`. |
-| Overrides file-shadow | Three-layer resource resolution: your file under `%USERPROFILE%\snaphak\overrides\` wins, then the built-in default decls (served from memory — the "*Custom" tab set; never written to your folder, so they update with each release and deleting your file restores the default), then the game's packaged resource. Install logs an audit of your active overrides and reclaims untouched default copies written by earlier releases. |
-| Strids injector | Inject custom `#str_` strings from `%USERPROFILE%\snaphak\strings\strids.json` into the engine string table (your key wins over a built-in default for the same id). |
+| Rawmap load | When rawmaps are on, load the map from `%LOCALAPPDATA%\snapmap-plus\rawmap.json` instead of the engine's own save. |
+| Rawmap save | On every editor save, mirror the serialized map JSON to `%LOCALAPPDATA%\snapmap-plus\rawmap.json`. |
+| Overrides file-shadow | Three-layer resource resolution: your file under `%LOCALAPPDATA%\snapmap-plus\overrides\` wins, then the built-in default decls (served from memory — the "*Custom" tab set; never written to your folder, so they update with each release and deleting your file restores the default), then the game's packaged resource. Install logs an audit of your active overrides and reclaims untouched default copies written by earlier releases. |
+| Strids injector | Inject custom `#str_` strings from `%LOCALAPPDATA%\snapmap-plus\strings\strids.json` into the engine string table (your key wins over a built-in default for the same id). |
 | Fault handling | The clone replaces the original's two kill-detours (which terminate DOOM) with the recover-in-place fault-shield (see [`fidelity.md`](fidelity.md)). |
 | SuperScript table | Merge the parked `cs_*` SuperScript objects into the engine's eventDef enumerate/lookup/dispatch paths. |
 | Math acceleration | An optional SIMD/threading accelerator for engine math; not required for parity (a perf feature, not a user-facing one). |

@@ -27,7 +27,7 @@
 #include <math.h>
 #include <float.h>
 #include "snapstack.h"
-#include "snaphak_iface.h"
+#include "snapmap_plus_iface.h"
 #include "json_patch.h"
 #include "commands.h"           /* sh_printf -- the snapstack_diag console report */
 #include "backend_log.h"        /* backend_log -- the snapstack_diag persisted summary */
@@ -35,7 +35,7 @@
 
 /* ============================================================ the growable int array ================
  * A minimal realloc-doubling int vector -- the same "small, linear, no external deps" philosophy
- * snaphak_iface.c's own cmd-map already uses. Backs both a single numbered stack and a named group. */
+ * snapmap_plus_iface.c's own cmd-map already uses. Backs both a single numbered stack and a named group. */
 typedef struct ss_ids {
     int *items;
     int  count;
@@ -886,7 +886,7 @@ static void h_mkcmd(void *ctx, int argc, const char **argv)
 
     char *prefab = (char *)malloc(SH_APPLY_JSON_CAP + 4096);   /* heap-transient (see module doc comment) */
     if (!prefab) { free(commandText); ic_toast(iface, "SnapStack", "out of memory"); return; }
-    const char *ph = "__SNAPHAK_MKCMD_COMMANDTEXT__";
+    const char *ph = "__SH_MKCMD_COMMANDTEXT__";
     const char *tmplsrc = SH_MKCMD_PREFAB_TEMPLATE_C;
     const char *pos = strstr(tmplsrc, ph);
     if (!pos) { free(commandText); free(prefab); ic_toast(iface, "SnapStack", "mkcmd: template missing placeholder"); return; }

@@ -1,6 +1,6 @@
 # Security Policy
 
-SnapHak loads into DOOM 2016 as a set of DLLs, so a vulnerability here is a supply-chain risk for everyone who
+Snapmap+ loads into DOOM 2016 as a set of DLLs, so a vulnerability here is a supply-chain risk for everyone who
 installs a release. We take reports seriously and appreciate responsible disclosure.
 
 ## Reporting a vulnerability
@@ -20,7 +20,7 @@ remain anonymous).
 
 ## Supported versions
 
-Security fixes are made against the latest release; older releases are not back-patched. Run `snaphak update` to
+Security fixes are made against the latest release; older releases are not back-patched. Run `snapmap-plus update` to
 stay current.
 
 ## How releases are protected
@@ -31,6 +31,6 @@ stay current.
 - Every merge to the default branch requires a passing security + build gate.
 - Third-party GitHub Actions are pinned to full commit SHAs.
 - Release artifacts ship a `MANIFEST.sha256` and a build-provenance attestation; verify a download with
-  `gh attestation verify <file> --repo snaphak/open-snaphak`.
+  `gh attestation verify <file> --repo doom-snapmap/snapmap-plus`.
 
-Thank you for helping keep SnapHak and its users safe.
+Thank you for helping keep Snapmap+ and its users safe.

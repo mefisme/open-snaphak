@@ -1,4 +1,4 @@
-# src/ui/build.ps1 -- build the snaphakui.dll that hosts the SnapHak Studio UI in a Microsoft Edge
+# src/ui/build.ps1 -- build the snapmap-plus-ui.dll that hosts the Snapmap+ UI in a Microsoft Edge
 # WebView2 control (HTML/CSS/JS). Same exports + backend contract as the interface expects. Pure ASCII
 # (PS 5.1 reads BOM-less UTF-8 as 1252). Invoked by the repo-root build.ps1 (backend + frontend, lockstep).
 #
@@ -9,15 +9,15 @@
 #   2b. best-effort refresh of the embedded menubar logo from the GitHub org avatar (offline-safe:
 #      any fetch failure keeps the committed copy; a real change rewrites mockup.html -> commit it).
 #   3. generate build\obj\uiwv\mockup_html.h from webview\mockup.html (the UI, embedded in the DLL).
-#   4. cl-compile webview\snaphak_ui_webview.cpp + sl_exports.cpp -> build\snaphakui.dll, statically
-#      linking WebView2LoaderStatic.lib (no WebView2Loader.dll to ship).
+#   4. cl-compile webview\snapmap_plus_ui_webview.cpp + sl_exports.cpp -> build\snapmap-plus-ui.dll,
+#      statically linking WebView2LoaderStatic.lib (no WebView2Loader.dll to ship).
 #
 # Usage:  invoked by the repo-root build.ps1; or directly: pwsh -File src\ui\build.ps1 (backend not rebuilt)
 #
 # Needs: Build Tools for Visual Studio 2022 (C++ workload). Uses the system-installed WebView2 runtime
 # at RUN time (preinstalled on Windows 11; evergreen runtime on most Windows 10).
 param(
-    [string]$Out = "snaphakui.dll"
+    [string]$Out = "snapmap-plus-ui.dll"
 )
 $ErrorActionPreference = "Stop"
 $here   = Split-Path -Parent $MyInvocation.MyCommand.Path            # src\ui
@@ -58,7 +58,7 @@ if (-not (Test-Path $wvLib)) { throw "WebView2LoaderStatic.lib missing after SDK
 Write-Host "WebView2 SDK ready at $sdkDir"
 
 # --- 2b. sync the menubar logo from the org avatar (best-effort, offline-safe) ------------------------
-# The menubar logo is the GitHub org avatar (github.com/snaphak), carried inside mockup.html as a base64
+# The menubar logo is the GitHub org avatar (github.com/doom-snapmap), carried inside mockup.html as a base64
 # data URI (the page is loaded from a string in-game, so no file or URL would resolve at runtime). Each
 # build refreshes that copy: fetch the 64px avatar, and if it downloads, is a real JPEG/PNG, and differs
 # from what's embedded, rewrite the data URI in mockup.html -- the change then shows up in git like any
@@ -68,7 +68,7 @@ $htmlPath = Join-Path $here "webview\mockup.html"
 if (-not (Test-Path $htmlPath)) { throw "mockup.html not found at $htmlPath" }
 $logoTmp = Join-Path $objDir "org_avatar.tmp"
 try {
-    & curl.exe -sL --max-time 8 -o $logoTmp "https://github.com/snaphak.png?size=64" 2>$null
+    & curl.exe -sL --max-time 8 -o $logoTmp "https://github.com/doom-snapmap.png?size=64" 2>$null
     $ok = (Test-Path $logoTmp) -and ((Get-Item $logoTmp).Length -gt 0) -and ((Get-Item $logoTmp).Length -lt 65536)
     if ($ok) {
         $logoBytes = [IO.File]::ReadAllBytes($logoTmp)
@@ -104,23 +104,23 @@ $sliceTag  = '<script src="schema_slice.js"></script>'
 if (-not (Test-Path $slicePath)) { throw "schema_slice.js not found at $slicePath -- required (the decl editor would ship schema-less)" }
 if ($html.IndexOf($sliceTag) -lt 0) { throw "mockup.html does not contain the literal tag $sliceTag -- cannot inline the schema table" }
 $slice = Get-Content -Raw -Path $slicePath
-if ($slice.IndexOf(')SNAPHAK') -ge 0) { throw "schema_slice.js contains the raw-literal delimiter )SNAPHAK -- cannot embed" }
+if ($slice.IndexOf(')SNAPMAPPLUS') -ge 0) { throw "schema_slice.js contains the raw-literal delimiter )SNAPMAPPLUS -- cannot embed" }
 if ($slice.IndexOf('</script') -ge 0) { throw "schema_slice.js contains '</script' -- would terminate the inline script tag early" }
 $html = $html.Replace($sliceTag, "<script>`n$slice</script>")
 if ($html.IndexOf($sliceTag) -ge 0) { throw "schema_slice.js inlining left a residual src tag -- duplicate tag in mockup.html?" }
 
 # MSVC caps a single string literal at ~16 KB (error C2026). Split into <16 KB chunks emitted as
 # ADJACENT raw string literals -- the compiler concatenates them into one array. Raw literals need no
-# escaping; any byte is safe except the exact ")SNAPHAK" delimiter, which neither the HTML nor the
+# escaping; any byte is safe except the exact ")SNAPMAPPLUS" delimiter, which neither the HTML nor the
 # inlined schema table contains (guarded above for the slice).
-if ($html.IndexOf(')SNAPHAK') -ge 0) { throw "embedded HTML contains the raw-literal delimiter )SNAPHAK -- cannot chunk" }
+if ($html.IndexOf(')SNAPMAPPLUS') -ge 0) { throw "embedded HTML contains the raw-literal delimiter )SNAPMAPPLUS -- cannot chunk" }
 $chunkSize = 8000
 $sb = New-Object System.Text.StringBuilder
 [void]$sb.AppendLine("/* generated from webview/mockup.html by src/ui/build.ps1 -- do not edit */")
 [void]$sb.AppendLine("static const char kMockupHtml[] =")
 for ($i = 0; $i -lt $html.Length; $i += $chunkSize) {
     $len = [Math]::Min($chunkSize, $html.Length - $i)
-    [void]$sb.AppendLine('R"SNAPHAK(' + $html.Substring($i, $len) + ')SNAPHAK"')
+    [void]$sb.AppendLine('R"SNAPMAPPLUS(' + $html.Substring($i, $len) + ')SNAPMAPPLUS"')
 }
 [void]$sb.AppendLine(";")
 $hdrPath = Join-Path $objDir "mockup_html.h"
@@ -131,18 +131,18 @@ Write-Host "generated $hdrPath ($([Math]::Round(($html.Length/1KB),1)) KB of HTM
 # /MD (dynamic CRT: the WebView2 static loader + the process's existing MSVCP140/VCRUNTIME140 expect it),
 # /EHsc /std:c++17. Includes: WebView2 headers, the generated header dir, the shared iface ABI dir.
 # Sources: the WebView2 host + the unchanged sl_* export stubs. Links the static WebView2 loader + the
-# Win32 libs its COM/shell calls need. /DEF pins the OG export set (snaphak_ui_init @10 + sl_*).
+# Win32 libs its COM/shell calls need. /DEF pins the export set (sh_ui_init @10 -- the OG's ordinal -- + the OG-named sl_*).
 $incArgs = @(
     "/I`"$wvInclude`"",
     "/I`"$objDir`"",
     "/I`"$common`""
 ) -join " "
-$srcArgs = "webview\snaphak_ui_webview.cpp sl_exports.cpp"
+$srcArgs = "webview\snapmap_plus_ui_webview.cpp sl_exports.cpp"
 $libArgs = @(
     "`"$wvLib`"",
     "ole32.lib", "oleaut32.lib", "shell32.lib", "shlwapi.lib",
     "version.lib", "advapi32.lib", "user32.lib", "gdi32.lib",
-    "winhttp.lib"   # the feedback dialog's single user-initiated POST (see the capability note in snaphak_ui_webview.cpp)
+    "winhttp.lib"   # the feedback dialog's single user-initiated POST (see the capability note in snapmap_plus_ui_webview.cpp)
 ) -join " "
 $implib = $Out -replace '\.dll$', '.lib'
 
@@ -151,7 +151,7 @@ $implib = $Out -replace '\.dll$', '.lib'
 New-Item -ItemType Directory -Force (Join-Path $build "webview") | Out-Null
 $cl  = "cl /nologo /LD /O2 /W3 /EHsc /std:c++17 /MD /DWIN32 /D_WINDOWS /Fo..\..\build\obj\uiwv\ " +
        "$incArgs $srcArgs /Fe:..\..\build\webview\$Out " +
-       "/link /DEF:snaphakui.def /IMPLIB:..\..\build\obj\uiwv\$implib $libArgs"
+       "/link /DEF:snapmap-plus-ui.def /IMPLIB:..\..\build\obj\uiwv\$implib $libArgs"
 $cmd = "cd /d `"$here`" && `"$vcvars`" && $cl"
 
 $buildLog = Join-Path $build "build-ui.log"

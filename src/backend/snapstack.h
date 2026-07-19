@@ -2,7 +2,7 @@
  * named groups) and the 20 `sh <subcommand>` console handlers, in pure C.
  *
  * This module is the SOLE SnapStack implementation. It registers the 20 command names on the shared
- * sh_iface cmd-map (which overwrites on duplicate name -- see snaphak_iface.c's iface_register_cmd)
+ * sh_iface cmd-map (which overwrites on duplicate name -- see snapmap_plus_iface.c's iface_register_cmd)
  * from ui_bridge.c right after the interface object is created, before the frontend loads -- so every
  * `sh <subcommand>` runs this module's handlers. The frontend never registers a copy of its own.
  *
@@ -15,7 +15,7 @@
 #ifndef BACKEND_SNAPSTACK_H
 #define BACKEND_SNAPSTACK_H
 
-#include "snaphak_iface.h"
+#include "snapmap_plus_iface.h"
 
 /* Register the 20 SnapStack subcommands PLUS `snapstack_diag` (a backend-exclusive diagnostic -- see
  * snapstack.c) on the interface's cmd-map (+0x188). Safe to call once, early (before the frontend loads)

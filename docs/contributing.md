@@ -1,8 +1,8 @@
-# Contributing to open-snaphak
+# Contributing to Snapmap+
 
-open-snaphak is an open-source, clean-room reimplementation of **SnapHak** — Chrispy's closed-source modding
+Snapmap+ (repo `snapmap-plus`) is an open-source, clean-room reimplementation of **SnapHak** — Chrispy's closed-source modding
 tool for DOOM 2016's in-game **SnapMap** level editor. It builds to two drop-in Windows DLLs (a backend
-`XINPUT1_3.dll` and a WebView2/HTML frontend `snaphakui.dll`) plus a Go installer (`snaphak.exe`). This guide takes you
+`XINPUT1_3.dll` and a WebView2/HTML frontend `snapmap-plus-ui.dll`) plus a Go installer (`snapmap-plus.exe`). This guide takes you
 from a **fresh Windows machine** all the way to a built, tested change and an open pull request.
 
 If anything here is wrong, missing, or unclear, fixing it is itself a welcome PR.
@@ -58,7 +58,7 @@ workload. That installs the MSVC x64 compiler (`cl.exe`) and the Windows 10/11 S
 locates the toolchain with `vswhere`, requiring the `Microsoft.VisualStudio.Component.VC.Tools.x86.x64`
 component — included in that workload. You do **not** need the full Visual Studio IDE; the Build Tools suffice.
 
-**Go** is only needed to build the installer (`snaphak.exe`); you can skip it if you only touch the DLLs.
+**Go** is only needed to build the installer (`snapmap-plus.exe`); you can skip it if you only touch the DLLs.
 
 **DOOM 2016** (Steam app `379720`) is required to deploy and test a build in the game.
 
@@ -70,8 +70,8 @@ component — included in that workload. You do **not** need the full Visual Stu
 Fork the repo on GitHub (the **Fork** button) unless you have write access, then:
 
 ```powershell
-git clone https://github.com/<your-username>/open-snaphak.git
-cd open-snaphak
+git clone https://github.com/<your-username>/snapmap-plus.git
+cd snapmap-plus
 ```
 
 ## 4. Build the DLLs
@@ -81,7 +81,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1
 ```
 
 This compiles both DLLs into **`build/`**: the backend `XINPUT1_3.dll` and the frontend
-`build/webview/snaphakui.dll` (the WebView2 SDK is auto-fetched from NuGet on the first build). `build/`
+`build/webview/snapmap-plus-ui.dll` (the WebView2 SDK is auto-fetched from NuGet on the first build). `build/`
 is gitignored. (`build.ps1` first builds the backend, then the frontend, so the two never drift out of ABI
 sync -- see [`architecture.md`](architecture.md).)
 
@@ -105,17 +105,17 @@ file list.
 Build the installer once, then deploy your fresh `dist/` into your own DOOM with its **local** mode:
 
 ```powershell
-cd installer ; go build -o snaphak.exe . ; cd ..
-installer\snaphak.exe install --local dist
+cd installer ; go build -o snapmap-plus.exe . ; cd ..
+installer\snapmap-plus.exe install --local dist
 ```
 
 It auto-detects your DOOM via Steam (or pass `--doom <path>` to the folder with `DOOMx64vk.exe`), backs up
-anything it replaces, and records the install so **`installer\snaphak.exe uninstall`** restores vanilla
+anything it replaces, and records the install so **`installer\snapmap-plus.exe uninstall`** restores vanilla
 exactly. (You can also drop `dist\*` into the DOOM root by hand — `dist/` mirrors the overlay tree.)
 
-Launch DOOM and enter the SnapMap editor; the **"SnapHak Studio"** window opens (run `sh` in the in-game
-console if it doesn't). When you're done, `snaphak.exe uninstall` returns DOOM to vanilla and leaves your
-`%USERPROFILE%\snaphak` data untouched.
+Launch DOOM and enter the SnapMap editor; the **Snapmap+** window opens (run `sh` in the in-game
+console if it doesn't). When you're done, `snapmap-plus.exe uninstall` returns DOOM to vanilla and leaves your
+modding data (`%LOCALAPPDATA%\snapmap-plus`) untouched.
 
 ## 7. Run the tests
 
@@ -160,7 +160,7 @@ CI runs the self-contained C tests and the installer tests on every PR; the DOOM
 
 1. **Branch:** `git switch -c fix/steam-path-detection` (or `feature/<thing>`).
 2. **Change** code under `src/` (or `installer/`). Keep each PR focused on one thing.
-3. **Build + package + test in DOOM:** `build.ps1` → `package.ps1` → `snaphak.exe install --local dist`.
+3. **Build + package + test in DOOM:** `build.ps1` → `package.ps1` → `snapmap-plus.exe install --local dist`.
    A local round-trip is much faster than waiting on CI, and lets you actually see it working in DOOM rather
    than just "the build didn't fail." See [`architecture.md`](architecture.md)'s note on the vtable's
    extension slots for why a backend/frontend version mismatch is a real failure mode, not a theoretical one.
@@ -215,10 +215,10 @@ release. **Do not open a public issue for a security problem.** Use GitHub's **p
 | Path | What |
 |---|---|
 | `src/backend/` | the backend DLL (`XINPUT1_3.dll`): the hook layer, console commands, cvars, cvar-unlock, the resident fault-shield |
-| `src/ui/` | the frontend DLL (`snaphakui.dll`): the WebView2 "SnapHak Studio" window -- `webview/` holds the host (`snaphak_ui_webview.cpp`) + the UI (`mockup.html`) |
+| `src/ui/` | the frontend DLL (`snapmap-plus-ui.dll`): the WebView2 Snapmap+ window -- `webview/` holds the host (`snapmap_plus_ui_webview.cpp`) + the UI (`mockup.html`) |
 | `src/fault_shield/` | the recover-in-place vectored-exception fault shield (compiled into the backend) |
-| `src/common/` | the shared backend↔frontend interface ABI (`snaphak_iface.h`) |
-| `installer/` | `snaphak.exe` — the Go install / update / uninstall CLI |
+| `src/common/` | the shared backend↔frontend interface ABI (`snapmap_plus_iface.h`) |
+| `installer/` | `snapmap-plus.exe` — the Go install / update / uninstall CLI |
 | `tests/` | the C unit tests + `run-tests.ps1` |
 | `docs/` | architecture · capabilities · fidelity · packaging · webview-ui · backend-changes · this guide |
 | `build.ps1` | compile the DLLs → `build/` (backend + frontend; `-BackendOnly` for backend alone) |
@@ -228,12 +228,12 @@ release. **Do not open a public issue for a security problem.** Use GitHub's **p
 
 ## 13. Glossary
 
-- **SnapMap** — DOOM 2016's in-game level editor. **SnapHak** extends it.
+- **SnapMap** — DOOM 2016's in-game level editor. **Snapmap+** extends it.
 - **The original SnapHak / "OG"** — Chrispy's closed-source tool that this project reimplements clean-room.
   **"The clone"** — this project's reimplementation.
 - **The overlay** — the two files that deploy into a DOOM install (the backend + frontend DLLs).
 - **Backend / frontend** — the backend `XINPUT1_3.dll` (the engine-side hook layer) and the frontend
-  `snaphakui.dll` (the WebView2/HTML UI); they talk over the interface ABI in `src/common/`.
+  `snapmap-plus-ui.dll` (the WebView2/HTML UI); they talk over the interface ABI in `src/common/`.
 - **`XINPUT1_3.dll` / ordinals** — the backend ships as an XInput proxy DLL DOOM already loads. It must export
   `XInputGetState` / `XInputSetState` at ordinals **2 / 3** (DOOM imports them *by ordinal*) and forwards every
   XInput call through to the real `System32` DLL, so the controller keeps working.

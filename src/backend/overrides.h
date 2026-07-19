@@ -1,11 +1,11 @@
 /* overrides.h -- the OVERRIDES FILE-SHADOW resource loader, native C
  * (port of OG's resource-open vtable swap FUN_18000b370 / FUN_18000b110 / FUN_18000ce50).
  *
- * SnapHak "overrides" are a transparent file-shadow soft-mod: any resource the engine opens by name
- * is FIRST looked up as a same-named file under %USERPROFILE%\snaphak\overrides\ (or
+ * "Overrides" are a transparent file-shadow soft-mod: any resource the engine opens by name
+ * is FIRST looked up as a same-named file under %LOCALAPPDATA%\snapmap-plus\overrides\ (or
  * overrides\shader_includes\ for shader includes); if present, the engine is served that file's bytes
- * from disk instead of the packaged resource. This is how SnapHak ships its 29 snapeditorentitydef /
- * editor-settings / property-inspector overrides that expand the editor palette.
+ * from disk instead of the packaged resource. This is how the original SnapHak shipped its 29
+ * snapeditorentitydef / editor-settings / property-inspector overrides that expand the editor palette.
  *
  * MECHANISM (DIRECT, RE of OG XINPUT1_3.dll 2021-03-27 + live DOOM):
  *   The engine's resource-provider class has a C++ vtable at `engineBase + 0x27984a0` (DOOM
@@ -34,7 +34,7 @@
  *   - THREE-LAYER resolution (OG has two): user disk file -> our BUILT-IN default decls served FROM
  *     MEMORY (overrides_baked.h; the "*Custom" tab set) -> the engine's packaged resource. Built-ins
  *     are never written to the user's folder (they update with each release; deleting a user file =
- *     reset to default). The user layer is toggleable via the snaphak_user_overrides cvar; install
+ *     reset to default). The user layer is toggleable via the sh_user_overrides cvar; install
  *     runs a reclaim (deletes OUR untouched previously-written default copies) + an audit log pass.
  *
  * Clean-room: ported from our own RE (above). Zero OG SnapHak bytes.
@@ -57,8 +57,8 @@
 int sh_overrides_install(void *ctor_fn, int ctor_status_ok);
 
 /* Set the overrides ROOT directory (the dir that holds overrides\ and overrides\shader_includes\). The
- * effective lookup is <root>\overrides\<name>. Default = %USERPROFILE%\snaphak (OG's path -> overrides
- * under it). Pass NULL to reset to the default. Returns 1 if a path is set. */
+ * effective lookup is <root>\overrides\<name>. Default = %LOCALAPPDATA%\snapmap-plus (the OG used
+ * %USERPROFILE%\snaphak). Pass NULL to reset to the default. Returns 1 if a path is set. */
 int sh_overrides_set_root(const char *path);
 
 /* How many times the shadow has FIRED (served an override file instead of the packaged resource).

@@ -1,7 +1,7 @@
-/* snaphak_ui_webview.cpp -- the frontend: snaphakui.dll hosts the "SnapHak Studio" UI as HTML in a
+/* snapmap_plus_ui_webview.cpp -- the frontend: snapmap-plus-ui.dll hosts the "Snapmap+" UI as HTML in a
  * Microsoft Edge WebView2 control.
  *
- * Exports snaphak_ui_init (ord 10), writes the loop-state to
+ * Exports sh_ui_init (ord 10; the OG's counterpart was snaphak_ui_init), writes the loop-state to
  * arg-block[0], caches the backend interface (arg-block[3]) and drains its work-queue (+0x1a0) at
  * ~30 Hz on this thread, keeps the 9 sl_* exports (../sl_exports.cpp). Zero DOOM/OG bytes.
  *
@@ -33,7 +33,7 @@
 #include <utility>
 
 #include "WebView2.h"
-#include "snaphak_iface.h"
+#include "snapmap_plus_iface.h"
 #include "mockup_html.h"
 #include "report_scrub.h"   /* pure anonymization scrub + tail for the crash-report log attachment */
 #include "../sh_entity_desc.h" /* GENERATED: OUR RE-extracted Inherit/Classname descriptions (same table sh_tabs.cpp uses) */
@@ -99,7 +99,7 @@ static int           g_load_result = 0;          /* 1 staged ok (now press Ctrl+
                                                    * stage-only -- see backend-changes.md for why we don't try to
                                                    * automate the paste keystroke ourselves. */
 
-/* Folders: one real level of subdirectories under %USERPROFILE%\snaphak\prefabs\ (no nested-within-nested).
+/* Folders: one real level of subdirectories under %LOCALAPPDATA%\snapmap-plus\prefabs\ (no nested-within-nested).
  * folder="" always means the root prefabs\ dir. The folder/file IS the truth -- no separate manifest. */
 static volatile bool g_pending_create_folder = false;
 static std::string   g_create_folder_name;
@@ -158,10 +158,10 @@ static int    g_tl_count = 0;
 /* ------------------------------------------------------------------ tiny file log ------------------ */
 static void poc_log(const char *msg)
 {
-    CreateDirectoryA("snaphak", nullptr);        /* one level at a time; both idempotent */
-    CreateDirectoryA("snaphak\\logs", nullptr);
+    CreateDirectoryA("snapmap-plus", nullptr);   /* one level at a time; both idempotent */
+    CreateDirectoryA("snapmap-plus\\logs", nullptr);
     FILE *f = nullptr;
-    if (fopen_s(&f, "snaphak\\logs\\webview_poc.log", "a") == 0 && f) {
+    if (fopen_s(&f, "snapmap-plus\\logs\\webview_poc.log", "a") == 0 && f) {
         SYSTEMTIME t; GetLocalTime(&t);
         fprintf(f, "[%02d:%02d:%02d] %s\n", t.wHour, t.wMinute, t.wSecond, msg);
         fclose(f);
@@ -306,7 +306,7 @@ static void poc_read_version()
 {
     char *la = nullptr; size_t n = 0;
     if (_dupenv_s(&la, &n, "LOCALAPPDATA") != 0 || !la) return;
-    std::string path = std::string(la) + "\\open-snaphak\\install.json";
+    std::string path = std::string(la) + "\\snapmap-plus\\install.json";
     free(la);
     FILE *f = nullptr;
     if (fopen_s(&f, path.c_str(), "rb") != 0 || !f) return;
@@ -1236,8 +1236,8 @@ static bool poc_read_meta_tags(const std::string &folder, const std::string &nam
     return true;
 }
 
-/* enumerate %USERPROFILE%\snaphak\prefabs\ (resolved via the +0xc0 interface slot, the same path the
- * original's Prefabs tab lists): the root *.json files, plus one real level
+/* enumerate %LOCALAPPDATA%\snapmap-plus\prefabs\ (resolved via the +0xc0 interface slot; the OG's
+ * Prefabs tab listed %USERPROFILE%\snaphak\prefabs\): the root *.json files, plus one real level
  * of subdirectories (each a "folder"), each listing its own *.json files. No nested-within-nested. Empty
  * (or missing dir) sends empty arrays so the UI can show its empty state. The trailing "meta" map carries
  * each prefab's sidecar tags ("<folder>/<name>" or "<name>" -> ["tag",...], tagged entries only) so the
@@ -1350,7 +1350,7 @@ static void poc_apply_save_prefab_meta(const std::string &name, const std::strin
  * thread, so a synchronous WinHTTP call there would freeze the whole UI for up to the timeout. The
  * thread only touches the g_report_* cells; the think loop polls g_report_done and posts the result to
  * the page from the correct (loop) thread, like every other *Result message. */
-static const wchar_t *kReportHost = L"snaphak-feedback.open-snaphak.workers.dev";   /* the deployed relay (feedback/); unreachable -> red toast, nothing else */
+static const wchar_t *kReportHost = L"snapmap-plus-feedback.doom-snapmap.workers.dev";   /* the deployed relay (feedback/); unreachable -> red toast, nothing else */
 static const wchar_t *kReportPath = L"/report";
 #define REPORT_PAYLOAD_CAP (64 * 1024)
 
@@ -1416,7 +1416,7 @@ static DWORD WINAPI report_thread(LPVOID)
 
 /* ------------------------------------------------------------------ crash reports ------------------ */
 /* The backend's fault machinery writes one small JSON crash record per serious fault to
- * <game>\snaphak\crash\pending-*.json (crash-safe, at fault time). This side is the REPORTING end:
+ * <game>\snapmap-plus\crash\pending-*.json (crash-safe, at fault time). This side is the REPORTING end:
  * the think loop polls that directory (~2 s, cheap FindFirstFile) and posts the latest record to the
  * page, which raises the crash-report dialog -- in-session when the fault was survived, on the next
  * launch when it wasn't. One mechanism, both timings. Submission rides the exact same relay POST as
@@ -1424,8 +1424,8 @@ static DWORD WINAPI report_thread(LPVOID)
  * tails of the local logs, ANONYMIZED first (the account/profile/machine names are scrubbed -- see
  * report_scrub.h). Dismiss and a successful send both clear the pending records (never nag twice);
  * the full logs and any crash dump stay untouched on disk. */
-static const char *kCrashDir  = "snaphak\\crash";        /* CWD = the game dir (poc_log's convention) */
-static const char *kCrashGlob = "snaphak\\crash\\pending-*.json";
+static const char *kCrashDir  = "snapmap-plus\\crash";   /* CWD = the game dir (poc_log's convention) */
+static const char *kCrashGlob = "snapmap-plus\\crash\\pending-*.json";
 #define CRASH_RECORD_READ_CAP  16384                      /* a record is ~2 KB; cap the read anyway */
 #define CRASH_LOG_TAIL_KEEP    (15 * 1024)                /* per-log tail budget (3 logs ~= 45 KB) */
 
@@ -1484,7 +1484,7 @@ static void crash_clear_pending()
  * Anonymous-by-design is the feature's contract; the dialog says so next to the checkbox. */
 static std::string crash_collect_logs()
 {
-    static const char *files[] = { "shield_faults.log", "snaphak_backend.log", "webview_poc.log" };
+    static const char *files[] = { "shield_faults.log", "sh_backend.log", "webview_poc.log" };
     char user[64] = "", comp[64] = "", prof[MAX_PATH] = "";
     const char *profleaf = "";
     DWORD un = sizeof user, cn = sizeof comp;
@@ -1497,7 +1497,7 @@ static std::string crash_collect_logs()
     std::string out;
     std::vector<char> raw(CRASH_LOG_TAIL_KEEP + 4096), scrub(2 * (CRASH_LOG_TAIL_KEEP + 4096));
     for (const char *fn : files) {
-        std::string path = std::string("snaphak\\logs\\") + fn;
+        std::string path = std::string("snapmap-plus\\logs\\") + fn;
         FILE *f = nullptr;
         if (fopen_s(&f, path.c_str(), "rb") != 0 || !f) continue;
         _fseeki64(f, 0, SEEK_END);
@@ -1557,13 +1557,13 @@ static void poc_create_window()
 {
     WNDCLASSEXW wc = {};
     wc.cbSize = sizeof(wc); wc.lpfnWndProc = PocWndProc; wc.hInstance = GetModuleHandleW(nullptr);
-    wc.hCursor = LoadCursor(nullptr, IDC_ARROW); wc.lpszClassName = L"SnapHakStudioWebView";
+    wc.hCursor = LoadCursor(nullptr, IDC_ARROW); wc.lpszClassName = L"SnapmapPlusStudioWebView";
     wc.style = CS_NOCLOSE;   /* remove the native close (X) button -- can't close the UI from the editor */
     RegisterClassExW(&wc);
     /* default size big enough to show the Entities list + state editor (or the Prefabs folder tree + card)
      * side by side with no clipping on a typical 1080p+ display, without needing a manual resize on first
      * launch. Fits comfortably within 1920x1080 with room for the taskbar. */
-    g_hwnd = CreateWindowExW(0, L"SnapHakStudioWebView", L"Snapmap+",
+    g_hwnd = CreateWindowExW(0, L"SnapmapPlusStudioWebView", L"Snapmap+",
         WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 1440, 900, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
     /* force a frame recalculation now so WM_NCCALCSIZE strips the title bar BEFORE the window is first
      * shown -- otherwise the native frame lingers until the first resize/move. */
@@ -1827,7 +1827,7 @@ static void poc_start_webview()
 {
     wchar_t local[MAX_PATH] = {}; std::wstring udf = L".";
     if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, local))) {
-        udf = std::wstring(local) + L"\\open-snaphak\\webview2"; SHCreateDirectoryExW(nullptr, udf.c_str(), nullptr);
+        udf = std::wstring(local) + L"\\snapmap-plus\\webview2"; SHCreateDirectoryExW(nullptr, udf.c_str(), nullptr);
     }
     HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(nullptr, udf.c_str(), nullptr,
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(on_environment_created).Get());
@@ -2044,7 +2044,7 @@ static void poc_think_loop()
     }
 }
 
-extern "C" __declspec(dllexport) DWORD WINAPI snaphak_ui_init(LPVOID param_1)
+extern "C" __declspec(dllexport) DWORD WINAPI sh_ui_init(LPVOID param_1)
 {
     sh_ui_argblock *args = reinterpret_cast<sh_ui_argblock *>(param_1);
     g_loop = new ShLoopState();
@@ -2054,14 +2054,14 @@ extern "C" __declspec(dllexport) DWORD WINAPI snaphak_ui_init(LPVOID param_1)
     g_ents = (PocEnt *)malloc(sizeof(PocEnt) * POC_MAX_ENTS);
     g_tls  = (PocTl  *)malloc(sizeof(PocTl)  * POC_MAX_TLS);
     if (!g_ents || !g_tls) {
-        poc_log("snaphak_ui_init: FATAL -- malloc failed for g_ents/g_tls, aborting init");
+        poc_log("sh_ui_init: FATAL -- malloc failed for g_ents/g_tls, aborting init");
         free(g_ents); g_ents = nullptr;
         free(g_tls);  g_tls  = nullptr;
         return 1;
     }
     poc_read_version();
 
-    poc_log("=== snaphak_ui_init (WebView2 POC, entities-deep) entered ===");
+    poc_log("=== sh_ui_init (WebView2 POC, entities-deep) entered ===");
     poc_log(g_iface ? "interface handed over: yes" : "interface handed over: NO (null)");
     { char v[128]; _snprintf_s(v, sizeof v, _TRUNCATE, "installed version: %s", g_version.c_str()); poc_log(v); }
 

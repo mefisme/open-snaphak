@@ -1,5 +1,5 @@
-/* snaphak_iface.c -- the BACKEND-hosted interface-object factory + the live REGISTER/UNREGISTER/DRAIN
- * bodies (the generic, engine-free trio). See snaphak_iface.h for the pinned ABI.
+/* snapmap_plus_iface.c -- the BACKEND-hosted interface-object factory + the live REGISTER/UNREGISTER/DRAIN
+ * bodies (the generic, engine-free trio). See snapmap_plus_iface.h for the pinned ABI.
  *
  * The OG builds this object in XINPUT1_3 FUN_1800229b1 (operator_new(0x60) + the 0x78 sub-object + the
  * RB-tree map + the work-queue vector). We build the SAME shape with a portable C implementation:
@@ -14,7 +14,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "snaphak_iface.h"
+#include "snapmap_plus_iface.h"
 
 /* The cmd-map: a simple name->{handler,ctx} list. OG uses a std::map RB-tree at sub+0x00; for the clone
  * the lookup is by name and the set is small (20), so a linear/grown array is faithful in behavior (same

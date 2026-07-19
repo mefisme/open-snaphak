@@ -7,11 +7,11 @@ feature list see [`capabilities.md`](capabilities.md); for the deliberately-fait
 ## The two DLLs and the boundary between them
 
 The clone is a **backend** (`XINPUT1_3.dll`, built from `src/backend/`) and a **frontend**
-(`snaphakui.dll`, built from `src/ui/`).
+(`snapmap-plus-ui.dll`, built from `src/ui/`).
 
 - The backend loads first. DOOM loads `XINPUT1_3.dll` at startup (it sits in the game root and
   forwards the real XInput exports through to System32). Once running, the **backend** does
-  `LoadLibraryA(".\\snaphak\\snaphakui.dll")` and then `CreateThread(snaphak_ui_init, ...)` to
+  `LoadLibraryA(".\\snapmap-plus\\snapmap-plus-ui.dll")` and then `CreateThread(sh_ui_init, ...)` to
   bring the frontend window up on its own thread.
 - The frontend never touches the engine directly. Every engine read or write the UI needs goes
   through a shared **interface object** that the backend creates and hands to the frontend's
@@ -23,8 +23,8 @@ holds no raw engine addresses, so a DOOM update only forces a re-derive on the b
 
 ## The frontend: a WebView2 (HTML) window
 
-The frontend (`src/ui/webview/snaphak_ui_webview.cpp`) hosts the "SnapHak Studio" UI as HTML/CSS/JS in a
-Microsoft Edge **WebView2** control inside a plain Win32 window. Its `snaphak_ui_init` entry (export
+The frontend (`src/ui/webview/snapmap_plus_ui_webview.cpp`) hosts the Snapmap+ UI as HTML/CSS/JS in a
+Microsoft Edge **WebView2** control inside a plain Win32 window. Its `sh_ui_init` entry (export
 ordinal 10, the same entry the backend calls) creates the window, brings up WebView2, loads the UI
 (`mockup.html`, compiled into the DLL), wires the JS <-> native bridge, stores the backend **interface**
 pointer, then enters the think-loop and never returns. The UI's structure — the tabs, the entity list,
@@ -54,7 +54,7 @@ lock). Replicate the pump.
 
 ## The interface vtable (the matched-pair ABI)
 
-The shared interface object is defined once, in `src/common/snaphak_iface.h`, and **both DLLs
+The shared interface object is defined once, in `src/common/snapmap_plus_iface.h`, and **both DLLs
 include that header** — it is a matched pair. The backend writes the vtable and fields; the
 frontend reads them at the same offsets.
 

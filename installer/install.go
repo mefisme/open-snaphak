@@ -75,14 +75,14 @@ func saveRecord(rec *installRecord) error {
 
 func cmdInstall(f flags) error {
 	if f.local == "" {
-		selfInstall() // a real (release) install -> keep a stable copy of snaphak.exe; skip for dev --local builds
+		selfInstall() // a real (release) install -> keep a stable copy of snapmap-plus.exe; skip for dev --local builds
 	}
 	doom, err := resolveDoom(f.doom)
 	if err != nil {
 		return err
 	}
 	if doomIsRunning() {
-		return fmt.Errorf("DOOM is running -- close it and run this again (SnapHak's files can't be replaced while the game has them open)")
+		return fmt.Errorf("DOOM is running -- close it and run this again (Snapmap+'s files can't be replaced while the game has them open)")
 	}
 	b, cleanup, err := acquireBundle(f)
 	if err != nil {
@@ -112,15 +112,15 @@ func cmdInstall(f flags) error {
 		Backups:       priorBackups,
 		LegacyRemoved: priorLegacy,
 	}
-	// The original SnapHak in this DOOM folder? This SnapHak replaces it -- migrate (remove its files)
+	// The original SnapHak in this DOOM folder? Snapmap+ replaces it -- migrate (remove its files)
 	// as part of the install, after the confirmation below.
 	legacy := detectLegacy(doom)
-	confirmMsg := fmt.Sprintf("About to install SnapHak %s into\n  %s\nContinue?", rec.Version, doom)
+	confirmMsg := fmt.Sprintf("About to install Snapmap+ %s into\n  %s\nContinue?", rec.Version, doom)
 	if len(legacy) > 0 {
-		fmt.Println("Found the original SnapHak in this DOOM folder. This SnapHak replaces it, so its")
+		fmt.Println("Found the original SnapHak in this DOOM folder. Snapmap+ replaces it, so its")
 		fmt.Printf("files (%d) will be removed. Your maps, prefabs and overrides under\n", len(legacy))
-		fmt.Printf("%%USERPROFILE%%\\snaphak are yours and are kept.\n")
-		confirmMsg = fmt.Sprintf("About to remove the original SnapHak and install SnapHak %s into\n  %s\nContinue?", rec.Version, doom)
+		fmt.Printf("%%USERPROFILE%%\\snaphak are yours and are kept (they carry over).\n")
+		confirmMsg = fmt.Sprintf("About to remove the original SnapHak and install Snapmap+ %s into\n  %s\nContinue?", rec.Version, doom)
 	}
 	// FINAL gate -- runs only after every check passed (DOOM found, DOOM closed, bundle downloaded + verified).
 	if !f.yes && isInteractive() {
@@ -138,7 +138,7 @@ func cmdInstall(f flags) error {
 	for _, bk := range rec.Backups {
 		backedUp[bk.Rel] = true
 	}
-	fmt.Printf("Installing SnapHak into %s\n", doom)
+	fmt.Printf("Installing Snapmap+ into %s\n", doom)
 	for _, e := range b.files {
 		target := filepath.Join(doom, e.rel)
 		// Back up only a GENUINE pre-existing file we'd overwrite (e.g. a real XINPUT1_3.dll). Skip if a
@@ -152,7 +152,7 @@ func cmdInstall(f flags) error {
 				}
 			}
 			if !ourFile && !backedUp[e.rel] {
-				bak := target + ".snaphak-bak"
+				bak := target + ".snapmap-plus-bak"
 				if _, err := os.Stat(bak); err != nil { // never clobber an existing backup
 					if err := os.Rename(target, bak); err != nil {
 						return fmt.Errorf("couldn't back up the existing %s (%v) -- check you can write to your DOOM folder (try running as administrator)", e.rel, err)
@@ -174,16 +174,16 @@ func cmdInstall(f flags) error {
 	if err := saveRecord(rec); err != nil {
 		return fmt.Errorf("installed the files, but couldn't write the install record (%v) -- uninstall may not fully clean up", err)
 	}
-	migrateLegacyLogs(doom) // runtime logs moved to snaphak\logs\ -- fold an older install's snaphak_logs\ in (best-effort)
+	migrateLegacyLogs(doom) // runtime logs live in snapmap-plus\logs\ -- fold an older install's root-level snaphak_logs\ in (best-effort)
 	migrateUserData()       // scaffold the app-data content tree + fold a user's old %USERPROFILE%\snaphak\ content forward (best-effort)
-	fmt.Printf("Done. SnapHak %s installed.\n", rec.Version)
+	fmt.Printf("Done. Snapmap+ %s installed.\n", rec.Version)
 	ensureWebView2Runtime(f) // the HTML UI renders in the WebView2 runtime -- ensure it's present (never fails the install)
 	fmt.Println("Launch DOOM and open the SnapMap editor.")
 	return nil
 }
 
-// migrateLegacyLogs folds a pre-existing root-level snaphak_logs\ (where runtime logs lived before they
-// moved under snaphak\logs\) into the new location, so an update doesn't strand old logs in a dir
+// migrateLegacyLogs folds a pre-existing root-level snaphak_logs\ (where runtime logs lived in the
+// oldest releases) into the current location, so an update doesn't strand old logs in a dir
 // nothing writes to anymore. Best-effort: a file that won't move (locked, name collision) stays behind
 // and the old dir is then left in place; never fails the install.
 func migrateLegacyLogs(doom string) {
@@ -192,7 +192,7 @@ func migrateLegacyLogs(doom string) {
 	if err != nil {
 		return // nothing to migrate
 	}
-	newDir := filepath.Join(doom, "snaphak", "logs")
+	newDir := filepath.Join(doom, "snapmap-plus", "logs")
 	if err := os.MkdirAll(newDir, 0o755); err != nil {
 		return
 	}
@@ -208,7 +208,7 @@ func migrateLegacyLogs(doom string) {
 	}
 	if rest, err := os.ReadDir(old); err == nil && len(rest) == 0 {
 		os.Remove(old)
-		fmt.Println("  ~ moved runtime logs into snaphak\\logs\\")
+		fmt.Println("  ~ moved runtime logs into snapmap-plus\\logs\\")
 	}
 }
 
@@ -221,11 +221,11 @@ func cmdUpdate(f flags) error {
 	if f.doom == "" {
 		f.doom = rec.DoomPath
 	}
-	fmt.Printf("Updating SnapHak in %s (current: %s)\n", rec.DoomPath, rec.Version)
+	fmt.Printf("Updating Snapmap+ in %s (current: %s)\n", rec.DoomPath, rec.Version)
 	if err := cmdInstall(f); err != nil {
 		return err
 	}
-	// The overlay is updated; now refresh snaphak.exe itself (best-effort -- never fails the overlay update).
+	// The overlay is updated; now refresh snapmap-plus.exe itself (best-effort -- never fails the overlay update).
 	if !f.noSelf {
 		selfUpdate(f, resolveToken(f))
 	}
@@ -235,7 +235,7 @@ func cmdUpdate(f flags) error {
 func cmdUninstall(f flags) error {
 	rec, err := loadRecord()
 	if err != nil {
-		return fmt.Errorf("SnapHak doesn't appear to be installed (no install record found) -- nothing to uninstall")
+		return fmt.Errorf("Snapmap+ doesn't appear to be installed (no install record found) -- nothing to uninstall")
 	}
 	doom := rec.DoomPath
 	if f.doom != "" {
@@ -245,12 +245,12 @@ func cmdUninstall(f flags) error {
 		return fmt.Errorf("DOOM is running -- close it and run this again (its files are in use)")
 	}
 	if !f.yes && isInteractive() {
-		if !confirm(fmt.Sprintf("About to remove SnapHak from\n  %s\nand restore vanilla. Continue?", doom)) {
+		if !confirm(fmt.Sprintf("About to remove Snapmap+ from\n  %s\nand restore vanilla. Continue?", doom)) {
 			fmt.Println("Cancelled -- nothing was changed.")
 			return nil
 		}
 	}
-	fmt.Printf("Removing SnapHak from %s\n", doom)
+	fmt.Printf("Removing Snapmap+ from %s\n", doom)
 
 	// 1) delete exactly the files this install placed (never whole directories)
 	for _, rel := range rec.Files {
@@ -270,27 +270,31 @@ func cmdUninstall(f flags) error {
 		}
 		fmt.Printf("  ~ restored %s\n", bk.Rel)
 	}
-	// 3) clean up the dirs we created. The runtime-logs dir (snaphak\logs\; older installs used a
-	//    root-level snaphak_logs\) is unambiguously ours -> remove it whole; snaphak/ + platforms/
-	//    only if now empty (a pre-existing tree is left intact).
+	// 3) clean up the dirs we created. The runtime-logs dir (snapmap-plus\logs\; releases before the
+	//    rename used snaphak\logs\, the oldest a root-level snaphak_logs\) is unambiguously ours ->
+	//    remove it whole; snapmap-plus/ + snaphak/ + platforms/ only if now empty (a pre-existing
+	//    tree is left intact).
+	os.RemoveAll(filepath.Join(doom, "snapmap-plus", "logs"))
 	os.RemoveAll(filepath.Join(doom, "snaphak", "logs"))
 	os.RemoveAll(filepath.Join(doom, "snaphak_logs"))
+	removeIfEmpty(filepath.Join(doom, "snapmap-plus"))
 	removeIfEmpty(filepath.Join(doom, "snaphak"))
 	removeIfEmpty(filepath.Join(doom, "platforms"))
-	// 4) auto-cleanup our app-data folder: the record, the saved token, and the stable snaphak.exe copy.
-	//    The user's %USERPROFILE%\snaphak modding data is NEVER touched.
+	// 4) auto-cleanup our app-data folder: the record, the saved token, and the stable snapmap-plus.exe copy.
+	//    The user's modding data (the %LOCALAPPDATA%\snapmap-plus content folders and any old
+	//    %USERPROFILE%\snaphak) is NEVER touched.
 	cleanupAppData()
-	fmt.Println("Done. DOOM restored to vanilla. (Your SnapHak modding data was left untouched.)")
+	fmt.Println("Done. DOOM restored to vanilla. (Your Snapmap+ modding data was left untouched.)")
 	return nil
 }
 
 func cmdStatus(f flags) error {
 	rec, err := loadRecord()
 	if err != nil {
-		fmt.Println("SnapHak is not installed (no install record).")
+		fmt.Println("Snapmap+ is not installed (no install record).")
 		return nil
 	}
-	fmt.Printf("SnapHak %s\n", rec.Version)
+	fmt.Printf("Snapmap+ %s\n", rec.Version)
 	fmt.Printf("  DOOM:      %s\n", rec.DoomPath)
 	fmt.Printf("  Installed: %s\n", rec.InstalledAt)
 	fmt.Printf("  Files:     %d\n", len(rec.Files))
@@ -309,7 +313,7 @@ func cmdStatus(f flags) error {
 
 // cmdVersion prints the installer's own version and, if a mod is installed, the installed mod version.
 func cmdVersion() {
-	fmt.Println("snaphak", version)
+	fmt.Println("snapmap-plus", version)
 	if rec, err := loadRecord(); err == nil {
 		fmt.Printf("installed mod: %s  (in %s)\n", rec.Version, rec.DoomPath)
 	}

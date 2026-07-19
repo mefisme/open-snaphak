@@ -1,4 +1,4 @@
-/* hook.h -- the SnapHak backend's inline-detour installer (port of OG FUN_180001790).
+/* hook.h -- the Snapmap+ backend's inline-detour installer (port of OG FUN_180001790).
  *
  * The backend places the real engine detours (rawmap save/load swap, the sh apply chain in
  * the feature ops). This installer ports SnapHak's own installer (truth snaphak/hook-install-mechanism.md):

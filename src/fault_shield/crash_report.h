@@ -3,8 +3,8 @@
  *
  * The shield's recovery layers (veh.c) keep the editor alive where they can; this module is the
  * durable evidence trail for the faults that still matter to the user: each one is written as a
- * small JSON crash record to <game>\snaphak\crash\pending-*.json with crash-safe primitives only.
- * The SnapHak Studio UI polls that directory and raises the crash-report dialog -- seconds later
+ * small JSON crash record to <game>\snapmap-plus\crash\pending-*.json with crash-safe primitives only.
+ * The Snapmap+ UI polls that directory and raises the crash-report dialog -- seconds later
  * for a survived (recovered) fault, or on the next launch when the process died.
  *
  * Three producers:
@@ -13,7 +13,7 @@
  *     Frame catch rethrows -- this is the ONLY capture point for that death);
  *   - the fatal handlers armed here: an unhandled-exception filter + a first-chance one-shot for
  *     the fatal codes that never reach a filter (heap corruption 0xC0000374, __fastfail 0xC0000409),
- *     both of which also write a crash dump (snaphak\logs\snaphak_crash.dmp, local only -- the
+ *     both of which also write a crash dump (snapmap-plus\logs\sh_crash.dmp, local only -- the
  *     dialog never uploads it).
  *
  * Everything here is LOG-ONLY: no handler alters an exception's disposition, and a write failure
@@ -41,8 +41,8 @@ void crash_report_file(const char *kind, unsigned long code, uintptr_t rip_rva,
                        uintptr_t fault_addr, const char *module_name,
                        const char *stack, const char *engine_text, const char *dump_path);
 
-/* Best-effort minidump for the fatal path (MiniDumpNormal|WithThreadInfo -> snaphak\logs\
- * snaphak_crash.dmp). Returns the dump path ("" if it could not be written). LOCAL ONLY. */
+/* Best-effort minidump for the fatal path (MiniDumpNormal|WithThreadInfo -> snapmap-plus\logs\
+ * sh_crash.dmp). Returns the dump path ("" if it could not be written). LOCAL ONLY. */
 const char *crash_report_write_dump(EXCEPTION_POINTERS *ep);
 
 #endif /* SHIELD_CRASH_REPORT_H */

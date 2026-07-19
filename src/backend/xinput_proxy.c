@@ -1,4 +1,4 @@
-/* xinput_proxy.c -- the XInput export surface for the SnapHak BACKEND's XINPUT1_3.dll.
+/* xinput_proxy.c -- the XInput export surface for the Snapmap+ BACKEND's XINPUT1_3.dll.
  *
  * Vanilla DOOM imports XINPUT1_3.dll for controller input (XInputGetState/SetState/GetCapabilities --
  * the 3 the OG SnapHak's own XINPUT1_3.dll implements). OUR backend takes that same app-dir slot (the

@@ -2,7 +2,7 @@
  * (port of OG XINPUT1_3 FUN_1800229b1's AddCommand spine + the per-command handlers).
  *
  * OG registers 22 console commands with the engine cmd system via idCmdSystemLocal::AddCommand
- * (engine 0x1AA3630), each dispatching to a SnapHak handler. We collapse OG's static-init std::vector
+ * (engine 0x1AA3630), each dispatching to its handler. We collapse OG's static-init std::vector
  * machinery to one install fn that calls the engine AddCommand directly per command -- no hardcoded
  * RVAs (the engine fns are signature-resolved by the signature resolver; the idCmdSystemLocal* global is
  * decoded build-portably from a sig'd accessor's RIP-relative MOV, the same LEA-decode idiom sh_strids
@@ -10,7 +10,7 @@
  *
  * All 22 command NAMES are registered (Tier B/C handlers are faithful "not yet implemented in
  * clone" stubs that print the OG help). The trivial handlers wire to the ALREADY-SHIPPED
- * ops: snapHak_rawmaps_on/off -> sh_rawmap_swap_arm. Later tranches
+ * ops: sh_rawmaps_on/off (OG snapHak_rawmaps_on/off) -> sh_rawmap_swap_arm. Later tranches
  * fill the decl/entity/type handlers.
  *
  * ABI (DIRECT, from the engine command-register decompiles):

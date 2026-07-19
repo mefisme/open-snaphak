@@ -2,8 +2,8 @@
  * AddCommand spine + handlers).
  *
  * Register the command NAMES; Tier B/C handlers are faithful "not yet implemented in
- * clone" stubs that print the OG help. snapHak_rawmaps_on/off are wired to the SHIPPED
- * sh_rawmap_swap_arm gate. sh_target_any is the editor-decl visibility toggle (target_any.c ->
+ * clone" stubs that print the OG help. sh_rawmaps_on/off (OG snapHak_rawmaps_on/off) are wired to the
+ * SHIPPED sh_rawmap_swap_arm gate. sh_target_any is the editor-decl visibility toggle (target_any.c ->
  * h_target_any), a pair-for-pair port of OG SnapHak's own sh_target_any (FUN_180021EE0).
  * snaphak_algo (cs_dontuse [18] + sh_alginfo) now lives in algo.c -- cs_dontuse toggles the 4 f64
  * engine-math overrides, sh_alginfo reports the reimpl present; both extern-declared near CMD_TABLE.
@@ -184,16 +184,17 @@ void *sh_resolve_cmdsys(const sig_result *results, size_t n, const uint8_t *modu
  * The trivial handlers (wired to shipped ops); all others are faithful stubs. Each is __fastcall with
  * a single idCmdArgs* arg. Handlers run as a Cbuf callback on the engine main thread (console exec). */
 
-/* [1] snapHak_rawmaps_on -> the SHIPPED sh_rawmap_swap_arm(1) gate (single source of truth). Prints the
- *     OG RUNTIME message "Enabling raw snapmap save/load." (the OG handler @0x21050), NOT the AddCommand help. */
+/* [1] sh_rawmaps_on (OG snapHak_rawmaps_on) -> the SHIPPED sh_rawmap_swap_arm(1) gate (single source of
+ *     truth). Prints the OG RUNTIME message "Enabling raw snapmap save/load." (the OG handler @0x21050),
+ *     NOT the AddCommand help. */
 static void h_rawmaps_on(idCmdArgs *a)
 {
     (void)a;
     sh_rawmap_swap_arm(1);
     sh_printf("Enabling raw snapmap save/load.\n");
 }
-/* [2] snapHak_rawmaps_off -> sh_rawmap_swap_arm(0). Prints OG RUNTIME "Disabling raw snapmap save/load."
- *     (the OG handler @0x21070), NOT the AddCommand help. */
+/* [2] sh_rawmaps_off (OG snapHak_rawmaps_off) -> sh_rawmap_swap_arm(0). Prints OG RUNTIME "Disabling raw
+ *     snapmap save/load." (the OG handler @0x21070), NOT the AddCommand help. */
 static void h_rawmaps_off(idCmdArgs *a)
 {
     (void)a;
@@ -232,7 +233,7 @@ static const char *lr_decl_name(const void *decl)
     __except (EXCEPTION_EXECUTE_HANDLER) { return NULL; }
 }
 
-/* A tiny growable byte buffer for the snaphak_copy_reslist_to_clipboard accumulation (each matched name
+/* A tiny growable byte buffer for the sh_copy_reslist_to_clipboard accumulation (each matched name
  * + '\n'). Heap-backed; freed by the caller. On any OOM the buffer goes "failed" and silently stops
  * accumulating (the console print still happens -- the clipboard copy just won't include the overflow). */
 typedef struct lr_buf {
@@ -261,7 +262,7 @@ static void lr_buf_append(lr_buf *b, const char *s)
 }
 
 /* [14] sh_listres <type> [filter] -- GetDeclsOfType(type), walk the decl array, print each name; if
- * argv[2] is present, substring-filter; if snaphak_copy_reslist_to_clipboard is set, accumulate the
+ * argv[2] is present, substring-filter; if sh_copy_reslist_to_clipboard is set, accumulate the
  * matched names and copy the list to the clipboard at the end. Clone of OG FUN_180022000
  * (its decompile @0x22000 + our listres-mechanism notes). */
 static void h_sh_listres(idCmdArgs *a)
@@ -300,7 +301,7 @@ static void h_sh_listres(idCmdArgs *a)
         return;
     }
 
-    int clip = sh_cvar_value_int(B2_CVAR_SNAPHAK_COPY_RESLIST_TO_CLIPBOARD, 0);
+    int clip = sh_cvar_value_int(B2_CVAR_SH_COPY_RESLIST_TO_CLIPBOARD, 0);
     lr_buf buf = { NULL, 0, 0, 0 };
 
     uint32_t printed = 0;
@@ -395,7 +396,8 @@ static int resolve_sig_by_name(const char *name, sig_result *out)
     return 0;
 }
 
-/* [15] snaphak_disable_devmode -- patch the session devmode getter to return 0 (devmode off). */
+/* [15] sh_disable_devmode (OG snaphak_disable_devmode) -- patch the session devmode getter to return 0
+ * (devmode off). */
 static void h_disable_devmode(idCmdArgs *a)
 {
     (void)a;
@@ -405,7 +407,7 @@ static void h_disable_devmode(idCmdArgs *a)
     }
     sig_result r;
     if (!resolve_sig_by_name(DEVMODE_SIG_NAME, &r)) {
-        sh_printf("snaphak_disable_devmode: %s not in the signature DB -- cannot patch.\n", DEVMODE_SIG_NAME);
+        sh_printf("sh_disable_devmode: %s not in the signature DB -- cannot patch.\n", DEVMODE_SIG_NAME);
         return;
     }
 
@@ -415,14 +417,15 @@ static void h_disable_devmode(idCmdArgs *a)
     const uint8_t new_bytes[3] = { 0x31, 0xC0, 0xC3 };
     sh_patch_status st = code_patch_sig(&r, expect, new_bytes, 3, &g_devmode_handle);
     if (st == B2_PATCH_OK)
-        sh_printf("snaphak_disable_devmode: %s -- devmode disabled (session getter -> 0)\n",
+        sh_printf("sh_disable_devmode: %s -- devmode disabled (session getter -> 0)\n",
                   sh_patch_status_str(st));
     else
-        sh_printf("snaphak_disable_devmode: %s -- patch refused, devmode unchanged\n",
+        sh_printf("sh_disable_devmode: %s -- patch refused, devmode unchanged\n",
                   sh_patch_status_str(st));
 }
 
-/* [16] snaphak_reenable_devmode -- restore the session devmode getter (undo the disable patch). */
+/* [16] sh_reenable_devmode (OG snaphak_reenable_devmode) -- restore the session devmode getter (undo the
+ * disable patch). */
 static void h_reenable_devmode(idCmdArgs *a)
 {
     (void)a;
@@ -432,10 +435,10 @@ static void h_reenable_devmode(idCmdArgs *a)
     }
     sh_patch_status st = code_unpatch(&g_devmode_handle);
     if (st == B2_PATCH_OK)
-        sh_printf("snaphak_reenable_devmode: %s -- devmode re-enabled (getter restored)\n",
+        sh_printf("sh_reenable_devmode: %s -- devmode re-enabled (getter restored)\n",
                   sh_patch_status_str(st));
     else
-        sh_printf("snaphak_reenable_devmode: %s -- restore failed\n", sh_patch_status_str(st));
+        sh_printf("sh_reenable_devmode: %s -- restore failed\n", sh_patch_status_str(st));
 }
 
 /* ----------------------------------------------------------------- [11] cs_start_render_logging ---
@@ -822,7 +825,7 @@ static void h_sh_debugrender(idCmdArgs *a)
 {
     const char *sub = cmd_argv(a, 1);
     if (sub == NULL) {
-        sh_printf("Not for users, for chrispy to test renderer stuff\n");
+        sh_printf("Internal renderer-test mutators -- not for normal use.\n");
         return;
     }
 
@@ -875,7 +878,7 @@ static void h_sh_debugrender(idCmdArgs *a)
     /* ---- NOT-AVAILABLE (heavy dev-only mutators, faithfully surfaced, out of the safe read-only scope) ---- */
     if (strcmp(sub, "test_rm_commit") == 0 || strcmp(sub, "test_sum_shit") == 0 ||
         strcmp(sub, "testnewgui") == 0) {
-        sh_printf("sh_debugrender: '%s' is a chrispy-internal render mutator -- not ported to the clone.\n", sub);
+        sh_printf("sh_debugrender: '%s' is an internal render mutator of the original tool -- not ported.\n", sub);
         return;
     }
 
@@ -907,7 +910,7 @@ static void h_sh_dispatch(idCmdArgs *a)
 
     const char *sub = cmd_argv(a, 1);
     if (sub == NULL) {
-        sh_printf("Dispatches a snaphak command\n");   /* OG usage when no subcommand given */
+        sh_printf("Dispatches a Snapmap+ command\n");   /* the OG's usage line said "snaphak" -- renamed */
         return;
     }
 
@@ -1074,7 +1077,7 @@ static void h_sh_superscriptop(idCmdArgs *a)
      * that documents the emitted #define pair (intended output, not the OG's struct decl which the OG
      * never actually filled in). */
     ss_dump_append(dump, sizeof dump, &dlen,
-        "// snaphak sh_superscriptop -- engine event definitions\n"
+        "// snapmap-plus sh_superscriptop -- engine event definitions\n"
         "// EV_<name> = the event number; FSPEC_<name> = its ';'-delimited arg-spec\n");
 
     unsigned emitted = 0;
@@ -1267,9 +1270,12 @@ void h_alginfo(idCmdArgs *a);
 void h_target_any(idCmdArgs *a);
 
 /* ------------------------------------------------------------------------ the command table -------
- * VERBATIM from the OG XINPUT1_3.dll string table (read 2026-06-21). sh_target_any carries lightly
- * reworded help but the OG behavior (the editor-decl visibility toggle, target_any.c).
- * Order mirrors the [1]-[22] command numbering. sh_help (at the end) is OUR OWN addition. */
+ * From the OG XINPUT1_3.dll string table (read 2026-06-21), with two deliberate post-rebrand
+ * divergences: the OG's snapHak_/snaphak_ command-name prefixes are renamed to sh_*, and the original
+ * author's personal name is scrubbed from the live help strings (the dev-only commands say "internal"
+ * instead). sh_target_any carries lightly reworded help but the OG behavior (the editor-decl
+ * visibility toggle, target_any.c). Order mirrors the [1]-[22] command numbering. sh_help (at the
+ * end) is OUR OWN addition. */
 typedef struct cmd_entry {
     const char *name;
     void       *handler;
@@ -1279,29 +1285,29 @@ typedef struct cmd_entry {
 static void h_sh_help(idCmdArgs *a);   /* defined after CMD_TABLE (it walks the table) */
 
 static const cmd_entry CMD_TABLE[] = {
-    { "snapHak_rawmaps_on",  (void *)h_rawmaps_on,  "Switches from the normal doom snapmap format to raw JSON maps for saving and loading." },
-    { "snapHak_rawmaps_off", (void *)h_rawmaps_off, "Switches from the raw JSON map format to the normal doom format for snapmaps." },
+    { "sh_rawmaps_on",       (void *)h_rawmaps_on,  "Switches from the normal doom snapmap format to raw JSON maps for saving and loading." },
+    { "sh_rawmaps_off",      (void *)h_rawmaps_off, "Switches from the raw JSON map format to the normal doom format for snapmaps." },
     { "sh_type",             (void *)h_sh_type,     "Dumps a types (enum/class) fields to the console and copies the text to your clipboard." },
     { "sh_validclasses",     (void *)h_sh_validclasses,"sh_validclasses <inherit> -- lists the engine-valid classNames for an inherit (the classes deriving from its base type Y; the class-dropdown enumerator)." },
     { "sh_entlist",          (void *)h_sh_entlist,  "Dumps the list of idEntity types in the engine" },
-    { "snaphak_disable_devmode",  (void *)h_disable_devmode,  "disable devmode" },
-    { "snaphak_reenable_devmode", (void *)h_reenable_devmode, "re-enable devmode" },
+    { "sh_disable_devmode",  (void *)h_disable_devmode,  "disable devmode" },
+    { "sh_reenable_devmode", (void *)h_reenable_devmode, "re-enable devmode" },
     { "sh_dumpmap",          (void *)h_sh_dumpmap,  "sh_dumpmap <file path> dumps the current mapfile, even the generated snapmap mapfile to the given path" },
     { "sh_spawn",            (void *)h_sh_spawn,    "sh_spawn <entitydef> <entity name after spawning>" },
     { "sh_dumpdef",          (void *)h_sh_dumpdef,  "sh_dumpdef <entity name>, dumps the entitydef of an existing ingame entity" },
-    { "cs_fieldinfo",        (void *)h_cs_fieldinfo,"for chrispy only, you dont need this" },
+    { "cs_fieldinfo",        (void *)h_cs_fieldinfo,"Internal type-field diagnostic -- you dont need this" },
     { "sh_genbmodel",        (void *)h_sh_genbmodel,"sh_genbmodel <input file> <output file> Generate a bmodel from a .obj/.ase/.lwo file. " },
     { "sh_genmd6model",      (void *)h_sh_genmd6model,"sh_genmd6model <input file> <output file> Compiles a .md6model into a bmd6model" },
     { "sh_target_any",       (void *)h_target_any,  "Toggles targetting for entities. Reveals / re-hides the campaign-only and normally-hidden placeable entity decls in the SnapMap editor palette." },
     { "sh_listres",          (void *)h_sh_listres,  "<resource classname (ex:idMaterial)> <optional: filter> list all resources of a given type" },
-    { "sh_alginfo",          (void *)h_alginfo,     "Prints CPU dispatcher info for snaphak_algo." },
-    { "sh_debugrender",      (void *)h_sh_debugrender,"Not for users, for chrispy to test renderer stuff" },
+    { "sh_alginfo",          (void *)h_alginfo,     "Prints CPU dispatcher info for the engine-math (algo) override layer." },
+    { "sh_debugrender",      (void *)h_sh_debugrender,"Internal renderer-test mutators -- not for normal use" },
     { "cs_dontuse",          (void *)h_cs_dontuse,  "Overrides some calculations in the engine to be more precise, just for shiggles. probably degrades performance and breaks stuff." },
-    { "sh_superscriptop",    (void *)h_sh_superscriptop,"For chrispy, dump stuff for superscript" },
-    { "cs_dumpeventdefs",    (void *)h_cs_dumpeventdefs,"For chrispy only otherwise you crash, dumps all eventdefs to a file for the wiki" },
+    { "sh_superscriptop",    (void *)h_sh_superscriptop,"Internal/dev: dump engine event definitions for SuperScript" },
+    { "cs_dumpeventdefs",    (void *)h_cs_dumpeventdefs,"Internal/dev: dumps all eventdefs to a file (for the wiki)" },
     { "cs_start_render_logging", (void *)h_cs_start_render_logging, "Sets up the renderlog hook " },
     { "sh_spawninfo",        (void *)h_sh_spawninfo,"Generate spawnOrientation/spawnPosition from current position in map" },
-    { "sh",                  (void *)h_sh_dispatch, "Dispatches a snaphak command" },
+    { "sh",                  (void *)h_sh_dispatch, "Dispatches a Snapmap+ command" },
     /* The 5 player-cheat commands (OG/DLM parity): DLM's dinput8 adds these to SnapMap; we reproduce them
      * clean-room (toggle one runtime bit on the local idPlayer -- entity.c). Match OG's names exactly. */
     { "noClip",              (void *)h_noclip,         "Toggle noclip (no-collision flight) for the local player." },
@@ -1309,23 +1315,23 @@ static const cmd_entry CMD_TABLE[] = {
     { "noPlayerDeath",       (void *)h_noplayerdeath,  "Toggle no-death (the player cannot die) for the local player." },
     { "noPlayerKill",        (void *)h_noplayerkill,   "Toggle no-kill (the player cannot be killed) for the local player." },
     { "noTarget",            (void *)h_notarget,       "Toggle notarget (enemies ignore the local player)." },
-    /* OUR OWN addition (no OG counterpart): one place that lists the whole SnapHak console surface. */
-    { "sh_help",             (void *)h_sh_help,        "Lists every SnapHak console command and cvar with its description." },
+    /* OUR OWN addition (no OG counterpart): one place that lists the whole Snapmap+ console surface. */
+    { "sh_help",             (void *)h_sh_help,        "Lists every Snapmap+ console command and cvar with its description." },
 };
 #define CMD_COUNT ((int)(sizeof(CMD_TABLE) / sizeof(CMD_TABLE[0])))
 
-/* sh_help -- print the full SnapHak console surface: every CMD_TABLE command (name + help) and every
+/* sh_help -- print the full Snapmap+ console surface: every CMD_TABLE command (name + help) and every
  * cvar table row (name + default + description). The help strings are the same ones registered with
  * the engine; this just puts them in ONE listing (the engine's own listCmds buries them among
  * thousands of engine commands). */
 static void h_sh_help(idCmdArgs *a)
 {
     (void)a;
-    sh_printf("SnapHak commands (%d):\n", CMD_COUNT);
+    sh_printf("Snapmap+ commands (%d):\n", CMD_COUNT);
     for (int i = 0; i < CMD_COUNT; i++)
         sh_printf("  %-28s %s\n", CMD_TABLE[i].name, CMD_TABLE[i].help);
     int ncv = sh_cvar_table_count();
-    sh_printf("SnapHak cvars (%d):\n", ncv);
+    sh_printf("Snapmap+ cvars (%d):\n", ncv);
     for (int i = 0; i < ncv; i++) {
         const char *nm = NULL, *df = NULL, *ds = NULL;
         if (sh_cvar_table_row(i, &nm, &df, &ds))
@@ -1481,7 +1487,7 @@ static void sh_command_unlock_install(void *cmdsys, void *add_command, const uin
 /* Register one command via the 6-arg engine AddCommand. flags=2 (developer-EXEMPT): AddCommand massages
  * 2 -> stored 6 (bits 0x2|0x4), so the command is appended into BOTH the cmdSystem FULL table (+0x08) AND
  * the DEV table (+0x20), and it passes ExecuteCommandText's "Attempting to call a developer command" cheat
- * guard (which throws iff dev-mode-on AND (flag&2)==0). Result: SnapHak's commands are typeable in the `~`
+ * guard (which throws iff dev-mode-on AND (flag&2)==0). Result: Snapmap+'s commands are typeable in the `~`
  * console whether or not dev mode is active (a developer tool flips dev-mode on -> the typed console then
  * scans the DEV table; with flags=0 our commands are FULL-only and read "Unknown command" there). The
  * engine's own always-typeable commands (`where`/`getviewpos`) use exactly flags=2.

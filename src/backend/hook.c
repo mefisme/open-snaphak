@@ -1,4 +1,4 @@
-/* hook.c -- see hook.h. The SnapHak backend's reversible inline-detour installer.
+/* hook.c -- see hook.h. The Snapmap+ backend's reversible inline-detour installer.
  *
  * Port of OG FUN_180001790 (truth snaphak/hook-install-mechanism.md), abs-jmp variant. The caller
  * supplies `stolen` (the count of whole, position-independent prologue bytes) -- we copy them to an

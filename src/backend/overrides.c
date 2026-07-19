@@ -2,7 +2,7 @@
  *
  * Swaps the engine resource-provider's open-by-name vtable slot (+0xf8) with our override-open hook.
  * On each engine open the resolution is THREE-LAYER:
- *   1. USER    -- overrides/<name> under %USERPROFILE%\snaphak\ on disk (an explicit user act; wins).
+ *   1. USER    -- overrides/<name> under %LOCALAPPDATA%\snapmap-plus\ on disk (an explicit user act; wins).
  *   2. BUILT-IN -- our baked default decls (overrides_baked.h), served FROM MEMORY. Nothing is ever
  *                  written to the user's folder, so defaults update with every release and "reset to
  *                  default" is simply deleting the user's file.
@@ -10,7 +10,7 @@
  * A mode>=2 recursion guard goes straight to the original (OG's `param_5 >= 2` branch). For a BUILT-IN
  * name only, a user file that fails a minimal well-formedness check (brace/quote balance) is refused and
  * the built-in default serves instead (logged) -- a garbled file there would take out the "*Custom" tab.
- * The user layer can be disabled for bisecting a broken override set via the snaphak_user_overrides
+ * The user layer can be disabled for bisecting a broken override set via the sh_user_overrides
  * cvar (or by renaming the overrides folder, which also covers opens before the cvar applies).
  *
  * Install-time passes (both logged, both SEH-guarded):
@@ -33,7 +33,7 @@
 #pragma comment(lib, "shell32.lib")   /* SHGetFolderPathA */
 #include "overrides.h"
 #include "backend_log.h"
-#include "cvars.h"                  /* sh_cvar_value_int_reg + B2_CVAR_SNAPHAK_USER_OVERRIDES */
+#include "cvars.h"                  /* sh_cvar_value_int_reg + B2_CVAR_SH_USER_OVERRIDES */
 #include "overrides_baked.h"        /* the built-in "*Custom"-tab default decls (Timeline + Unknown) */
 
 /* The engine open-by-name vtable method offset within the resource-provider vtable.
@@ -49,7 +49,7 @@ static open_fn_t  g_orig_open  = NULL;   /* the saved engine resource-open (the 
 static void     **g_slot       = NULL;   /* the live vtable slot we patched (for uninstall) */
 static volatile LONG g_shadow_count = 0;
 
-/* The overrides ROOT (holds overrides\ + overrides\shader_includes\). Default %USERPROFILE%\snaphak. */
+/* The overrides ROOT (holds overrides\ + overrides\shader_includes\). Default %LOCALAPPDATA%\snapmap-plus. */
 static char g_root[MAX_PATH] = {0};
 
 /* ============================================================ our idFile-subclass stream ===========
@@ -274,11 +274,11 @@ static ov_stream *make_mem_stream(const unsigned char *buf, long long length, co
 
 static void default_root(char *out, size_t cap)
 {
-    char profile[MAX_PATH];
-    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, profile)))
-        _snprintf_s(out, cap, _TRUNCATE, "%s\\snaphak", profile);
+    char base[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, base)))
+        _snprintf_s(out, cap, _TRUNCATE, "%s\\snapmap-plus", base);
     else
-        _snprintf_s(out, cap, _TRUNCATE, "snaphak");
+        _snprintf_s(out, cap, _TRUNCATE, "snapmap-plus");
 }
 
 static void resolve_root(char *out, size_t cap)
@@ -447,7 +447,7 @@ static ov_stream *open_user_for_baked_name(const char *name, int *malformed)
 /* The override-open hook -- our value in the engine's open vtable slot. Same ABI as the engine method.
  * mode>=2 (OG param_5>=2) is a recursion/no-shadow guard -> straight to the original. Otherwise resolve
  * three-layer: USER disk file -> BUILT-IN baked default (from memory) -> chain to the engine original.
- * The user layer is gated by the snaphak_user_overrides cvar (default 1; reads as 1 until the cvar is
+ * The user layer is gated by the sh_user_overrides cvar (default 1; reads as 1 until the cvar is
  * registered, so early-boot opens behave normally). SEH-guarded so a shadow path fault degrades to a
  * vanilla open. */
 static void *ov_open_hook(void *self, const char *name, unsigned char b1, unsigned char b2, unsigned int mode)
@@ -459,7 +459,7 @@ static void *ov_open_hook(void *self, const char *name, unsigned char b1, unsign
         const char *src = NULL;
         __try {
             const ov_baked_decl_t *baked = find_baked(name);
-            int user_on = sh_cvar_value_int_reg(B2_CVAR_SNAPHAK_USER_OVERRIDES, 1);
+            int user_on = sh_cvar_value_int_reg(B2_CVAR_SH_USER_OVERRIDES, 1);
             if (user_on) {
                 if (baked) {
                     int malformed = 0;
@@ -621,7 +621,7 @@ static void audit_user_overrides(void)
         char msg[MAX_PATH + 128];
         _snprintf_s(msg, sizeof msg, _TRUNCATE,
                     "B1: overrides audit -- %d user override file(s) active under %s%s%s "
-                    "(disable the user layer with snaphak_user_overrides 0 to bisect)",
+                    "(disable the user layer with sh_user_overrides 0 to bisect)",
                     count, dir, warned ? ", " : "", warned ? "with structural warnings above" : "");
         backend_log(msg);
     } __except (EXCEPTION_EXECUTE_HANDLER) { backend_log("B1: overrides audit skipped (fault)"); }

@@ -3,7 +3,7 @@
  * (one fewer shipped file + no System32 dinput8 shadow). The dinput8 runtime-forwarder is
  * dropped -- DOOM loads the real System32 dinput8 directly. Logic is otherwise verbatim.
  *
- * cvar_unlock.c -- clean-room native cvar-unlock for our open-source SnapHak.
+ * cvar_unlock.c -- clean-room native cvar-unlock for Snapmap+.
  *
  * WHAT THIS IS
  *   The open-source, clean-room replacement for the effect DoomLegacyMod (DLM) provides as
@@ -47,7 +47,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "cvar_unlock.h"
-#include "backend_log.h"   /* now in the backend: log the resolution path to snaphak_backend.log */
+#include "backend_log.h"   /* now in the backend: log the resolution path to sh_backend.log */
 
 /* ---- the unlock (applied to ALL cvars) ------------------------------------------------------- */
 

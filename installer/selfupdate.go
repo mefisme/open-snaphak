@@ -8,9 +8,9 @@ import (
 )
 
 // selfExeAsset is the standalone CLI published alongside each release's overlay bundle.
-const selfExeAsset = "snaphak.exe"
+const selfExeAsset = "snapmap-plus.exe"
 
-// shouldSelfUpdate decides whether the running snaphak.exe should replace itself with the resolved release's
+// shouldSelfUpdate decides whether the running snapmap-plus.exe should replace itself with the resolved release's
 // exe. It stays put for a dev/local build (version "dev" -- never clobber a hand-built binary) or when the
 // running version already matches the release tag.
 func shouldSelfUpdate(runningVersion, releaseTag string) bool {
@@ -34,7 +34,7 @@ func assetMatchesFile(a *ghAsset, path string) bool {
 	return err == nil && sum == hexDigest
 }
 
-// selfUpdate refreshes snaphak.exe itself from the resolved release. It is BEST-EFFORT and called AFTER the
+// selfUpdate refreshes snapmap-plus.exe itself from the resolved release. It is BEST-EFFORT and called AFTER the
 // overlay update, so a self-update problem never blocks the real install -- every failure just prints a note.
 // The new exe takes effect on the NEXT run (a running Windows image can't overwrite itself in place).
 //
@@ -43,11 +43,11 @@ func assetMatchesFile(a *ghAsset, path string) bool {
 // before touching anything, check what's actually ON DISK: if a previous run of this same session (or another
 // window) already put the release's bytes in place, there is nothing to do -- without the disk check, every
 // later update in the session would re-download the exe and then fail loudly trying to rename over
-// snaphak.exe.old, which is the still-running old image Windows won't let go of.
+// snapmap-plus.exe.old, which is the still-running old image Windows won't let go of.
 func selfUpdate(f flags, token string) {
 	rel, err := fetchRelease(f, token)
 	if err != nil {
-		fmt.Printf("(couldn't check for a snaphak.exe update: %v)\n", err)
+		fmt.Printf("(couldn't check for a snapmap-plus.exe update: %v)\n", err)
 		return
 	}
 	if !shouldSelfUpdate(version, rel.TagName) {
@@ -66,20 +66,20 @@ func selfUpdate(f flags, token string) {
 
 	exe, err := os.Executable()
 	if err != nil {
-		fmt.Printf("(couldn't locate the running snaphak.exe to update it: %v)\n", err)
+		fmt.Printf("(couldn't locate the running snapmap-plus.exe to update it: %v)\n", err)
 		return
 	}
 	if assetMatchesFile(asset, exe) {
 		return // the on-disk exe is already this release (an earlier run updated it) -- nothing to do
 	}
-	tmp, err := os.MkdirTemp("", "snaphak-exe-")
+	tmp, err := os.MkdirTemp("", "snapmap-plus-exe-")
 	if err != nil {
 		return
 	}
 	defer os.RemoveAll(tmp)
 	newExe := filepath.Join(tmp, selfExeAsset)
 	if err := downloadAsset(asset, token, newExe); err != nil {
-		fmt.Printf("(couldn't download the new snaphak.exe: %v)\n", err)
+		fmt.Printf("(couldn't download the new snapmap-plus.exe: %v)\n", err)
 		return
 	}
 	if onDisk, err := fileSHA256(exe); err == nil {
@@ -88,7 +88,7 @@ func selfUpdate(f flags, token string) {
 		}
 	}
 	if err := replaceExe(exe, newExe); err != nil {
-		fmt.Printf("(couldn't replace snaphak.exe (%v) -- the overlay updated fine; you can grab the new snaphak.exe from the release if needed)\n", err)
+		fmt.Printf("(couldn't replace snapmap-plus.exe (%v) -- the overlay updated fine; you can grab the new snapmap-plus.exe from the release if needed)\n", err)
 		return
 	}
 	// Keep the stable %LOCALAPPDATA% copy current too, if we're running from somewhere else.
@@ -99,7 +99,7 @@ func selfUpdate(f flags, token string) {
 			}
 		}
 	}
-	fmt.Printf("Updated snaphak.exe to %s (takes effect next time you run snaphak).\n", rel.TagName)
+	fmt.Printf("Updated snapmap-plus.exe to %s (takes effect next time you run snapmap-plus).\n", rel.TagName)
 }
 
 // replaceExe swaps a (possibly running) exe for a new one, the Windows way: rename the current file aside to

@@ -1,9 +1,10 @@
 /* rawmap.h -- the keystone rawmap LOAD swap, native C
  * (port of OG's DeserializeFromJson detour FUN_180023ad0).
  *
- * This is the core SnapHak feature, proven: SnapHak detours the engine's JSON-map deserializer
- * and SUBSTITUTES its own rawmap for the engine's input. With the swap armed, ANY engine map load is
- * transparently replaced by the contents of `%USERPROFILE%\snaphak\rawmap.json`.
+ * This is the core rawmap feature, proven in the original SnapHak: it detours the engine's JSON-map
+ * deserializer and SUBSTITUTES its own rawmap for the engine's input. With the swap armed, ANY engine
+ * map load is transparently replaced by the contents of `%LOCALAPPDATA%\snapmap-plus\rawmap.json`
+ * (the OG read `%USERPROFILE%\snaphak\rawmap.json`).
  *
  * MECHANISM (DIRECT): OG's LOAD handler is a detour on
  *   idSnapMap::DeserializeFromJson(const char* json, idSnapMap* out)   [engine RVA 0x5ea490; variant A,
@@ -52,8 +53,8 @@ int sh_rawmap_swap_install(void *deser_fn, int deser_status_ok);
  * the same path resolver so it tracks set_source). Each interception does one GetFileAttributes check;
  * if the flag exists AND the source reads, the swap fires and the log line carries "[flag-armed]". This
  * lets the test harness arm/disarm ONE controlled live map-load by creating/deleting the file -- no console
- * or RPC. The exact path is logged at install. The PRODUCTION arm is OG's snapHak_rawmaps_on console
- * command (later work); this flag-file is the TEST stand-in. */
+ * or RPC. The exact path is logged at install. The PRODUCTION arm is the sh_rawmaps_on console
+ * command (OG's snapHak_rawmaps_on); this flag-file is the TEST stand-in. */
 int sh_rawmap_swap_arm(int on);
 
 /* Set the file-backed rawmap source path (the bytes the swap delivers). For this slice a simple
@@ -68,9 +69,10 @@ unsigned long sh_rawmap_swap_count(void);
 /* rawmap.h -- the rawmap SAVE shadow, native C
  * (port of OG's SerializeToJson detour FUN_180023e60 -- the INVERSE of the LOAD swap sh_rawmap_swap).
  *
- * This is the SAVE half of SnapHak's rawmap feature: when the editor SAVES a SnapMap, SnapHak ALSO
- * writes the serialized map JSON to %USERPROFILE%\snaphak\rawmap.json, so the just-saved map becomes a
- * reusable rawmap (the inverse of the LOAD swap, which substitutes rawmap.json INTO a map load).
+ * This is the SAVE half of the rawmap feature: when the editor SAVES a SnapMap, the backend ALSO
+ * writes the serialized map JSON to %LOCALAPPDATA%\snapmap-plus\rawmap.json (the OG wrote
+ * %USERPROFILE%\snaphak\rawmap.json), so the just-saved map becomes a reusable rawmap (the inverse of
+ * the LOAD swap, which substitutes rawmap.json INTO a map load).
  *
  * MECHANISM (DIRECT, the OG decompile of
  * FUN_180023e60, ratified 2026-06-20): OG's SAVE handler is a detour on
@@ -114,9 +116,9 @@ unsigned long sh_rawmap_swap_count(void);
 int sh_rawmap_save_install(void *serialize_fn, int serialize_status_ok);
 
 /* Set the on-disk SHADOW destination path (the file each save is mirrored to). Pass NULL to reset to the
- * default %USERPROFILE%\snaphak\rawmap.json (OG's path, the same file the LOAD swap reads). The default
- * deliberately matches the LOAD source so a save-then-load round-trips OG-faithfully. Returns 1 if a
- * path is set. */
+ * default %LOCALAPPDATA%\snapmap-plus\rawmap.json (the OG used %USERPROFILE%\snaphak; the same file the
+ * LOAD swap reads). The default deliberately matches the LOAD source so a save-then-load round-trips.
+ * Returns 1 if a path is set. */
 int sh_rawmap_save_set_dest(const char *path);
 
 /* How many times the shadow has fired (mirrored a save to rawmap.json). Observability for the

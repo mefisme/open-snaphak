@@ -1,9 +1,9 @@
-# open-snaphak
+# Snapmap+
 
-An open-source, clean-room reimplementation of **SnapHak** — Chrispy's closed-source modding tool for
-DOOM 2016's in-game **SnapMap** level editor. It builds to two drop-in DLLs that, deployed into a stock
-DOOM 2016 install, reproduce SnapHak's editor extensions: the console-command/cvar hook layer and the
-"SnapHak Studio" window.
+**Snapmap+** is an open-source, clean-room reimplementation of **SnapHak** — Chrispy's closed-source
+modding tool for DOOM 2016's in-game **SnapMap** level editor. It builds to two drop-in DLLs that,
+deployed into a stock DOOM 2016 install, reproduce (and extend) the original's editor extensions: the
+console-command/cvar hook layer and the **Snapmap+** window.
 
 **This repo ships NO DOOM or SnapHak bytes.** Every line is built from the project's own reverse-engineering
 of the engine and the original tool — no decompiled or copied binary content. The original SnapHak is
@@ -15,24 +15,25 @@ research; the third-party runtime it links against (the DOOM engine, Microsoft's
 | Path | What |
 |---|---|
 | `src/backend/` | the backend DLL (`XINPUT1_3.dll`): the hook layer, 29 console commands, 10 cvars, cvar-unlock, and the resident fault-shield |
-| `src/ui/` | the frontend DLL (`snaphakui.dll`): the WebView2 **"SnapHak Studio"** window (`webview/` = the host + `mockup.html`) |
-| `src/common/` | the shared backend↔frontend interface ABI (`snaphak_iface.h`) |
+| `src/ui/` | the frontend DLL (`snapmap-plus-ui.dll`): the WebView2 **Snapmap+** window (`webview/` = the host + `mockup.html`) |
+| `src/common/` | the shared backend↔frontend interface ABI (`snapmap_plus_iface.h`) |
 | `src/fault_shield/` | the recover-in-place vectored-exception fault shield (compiled into the backend) |
 | `build.ps1` | compile the DLLs → `build/` (backend + frontend; `-BackendOnly` skips the frontend) |
 | `package.ps1` | assemble the deployable overlay → `dist/` (the two clone DLLs) |
-| `installer/` | `snaphak.exe` — the end-user install / update / uninstall CLI (Go) |
+| `installer/` | `snapmap-plus.exe` — the end-user install / update / uninstall CLI (Go) |
 | `docs/` | architecture · capabilities · fidelity · packaging · webview-ui · backend-changes |
 
 `build/` and `dist/` are gitignored — the **source is the deliverable**; the binaries are rebuilt.
 
 ## Quick start (players)
 
-You do **not** need to build anything. Get `snaphak.exe` from the latest release and **double-click it** — it
-auto-detects your DOOM install via Steam, asks you to confirm, and installs. (From a terminal: `snaphak install`.)
+You do **not** need to build anything. Get `snapmap-plus.exe` from the latest release and **double-click it** — it
+auto-detects your DOOM install via Steam, asks you to confirm, and installs. (From a terminal: `snapmap-plus install`.)
 
-`snaphak.exe` installs itself to `%LOCALAPPDATA%\open-snaphak\`. Run it again any time for `snaphak update`,
-`snaphak status`, `snaphak version`, and `snaphak uninstall` (which restores DOOM to vanilla and leaves your
-`%USERPROFILE%\snaphak` data untouched). Coming from the **original SnapHak**? Install/update detects it in
+`snapmap-plus.exe` installs itself to `%LOCALAPPDATA%\snapmap-plus\` (also the home of your overrides /
+prefabs / rawmaps). Run it again any time for `snapmap-plus update`, `snapmap-plus status`,
+`snapmap-plus version`, and `snapmap-plus uninstall` (which restores DOOM to vanilla and leaves your
+modding data untouched). Coming from the **original SnapHak**? Install/update detects it in
 your DOOM folder and removes its files as part of the install — your maps, prefabs and overrides carry
 straight over. See [`installer/README.md`](installer/README.md).
 
@@ -48,14 +49,14 @@ The frontend renders in the Microsoft Edge **WebView2 runtime** (preinstalled on
 its SDK is auto-fetched from NuGet at build time. Nothing else to install.
 
 ```powershell
-# 1. compile both DLLs -> build/XINPUT1_3.dll + build/webview/snaphakui.dll
+# 1. compile both DLLs -> build/XINPUT1_3.dll + build/webview/snapmap-plus-ui.dll
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File build.ps1
 
 # 2. assemble the deployable overlay -> dist/ (the 2-file DOOM tree: the two clone DLLs)
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File package.ps1
 
 # 3. (optional) build the installer
-cd installer ; go build -o snaphak.exe .
+cd installer ; go build -o snapmap-plus.exe .
 ```
 
 ## Deploy a local build (contributors / testing)
@@ -64,11 +65,11 @@ Deploy your fresh `dist/` into your own DOOM with the installer's **local** mode
 take, just from your build instead of a release:
 
 ```
-installer\snaphak.exe install --local dist
+installer\snapmap-plus.exe install --local dist
 ```
 
-`snaphak.exe uninstall` reverses it. (Or drop `dist\*` into the DOOM root by hand — `dist/` mirrors the exact
-overlay tree.) Launch DOOM, enter the SnapMap editor; the "SnapHak Studio" window opens (run `sh` in the
+`snapmap-plus.exe uninstall` reverses it. (Or drop `dist\*` into the DOOM root by hand — `dist/` mirrors the exact
+overlay tree.) Launch DOOM, enter the SnapMap editor; the Snapmap+ window opens (run `sh` in the
 console if it doesn't). DOOM keeps using the real `XInput1_3.dll` in System32 for controller input — the
 backend forwards every XInput export through to it.
 
@@ -76,7 +77,7 @@ backend forwards every XInput export through to it.
 
 Versions follow **semantic versioning** — `vMAJOR.MINOR.PATCH` (e.g. `v0.1.0`). **The git tag is the version**;
 there is no `VERSION` file to maintain. One tag = one release containing **both** the mod bundle and
-`snaphak.exe`, both stamped with that tag.
+`snapmap-plus.exe`, both stamped with that tag.
 
 Cut a release (maintainer):
 
@@ -85,19 +86,19 @@ git tag v0.1.0
 git push origin v0.1.0      # fires .github/workflows/release.yml
 ```
 
-CI builds the DLLs + the installer (stamping `snaphak.exe` via `-ldflags -X main.version=v0.1.0`), packages the
-overlay, and publishes a GitHub Release with `snaphak-bundle.zip` + `snaphak.exe` + `install.ps1`.
+CI builds the DLLs + the installer (stamping `snapmap-plus.exe` via `-ldflags -X main.version=v0.1.0`), packages the
+overlay, and publishes a GitHub Release with `snapmap-plus-bundle.zip` + `snapmap-plus.exe` + `install.ps1`.
 
 **Release channels** (set by the *tag*, not a branch):
-- **Stable** — a plain tag `v0.3.0`. This is what end users' `snaphak update` gets.
+- **Stable** — a plain tag `v0.3.0`. This is what end users' `snapmap-plus update` gets.
 - **Beta** — a pre-release tag `v0.3.0-beta.1` (any tag with a `-`; CI auto-marks it a GitHub pre-release). It's
   excluded from "latest", so end users never receive it. Beta testers opt in:
-  `snaphak install --release v0.3.0-beta.1`.
+  `snapmap-plus install --release v0.3.0-beta.1`.
 
 Pin any version explicitly with `--release <tag>` on `install` or `update`.
 
-- **`snaphak version`** prints the installer's version (and the installed mod version, if any).
-- **`snaphak update`** pulls the latest release; **`snaphak status`** shows what's installed.
+- **`snapmap-plus version`** prints the installer's version (and the installed mod version, if any).
+- **`snapmap-plus update`** pulls the latest release; **`snapmap-plus status`** shows what's installed.
 - A local/dev build reports `dev` (unstamped) or `local` (a `--local` install) — never a release number.
 
 **Surviving DOOM updates (planned):** the clone resolves engine functions by *signature*, so many DOOM patches
@@ -113,7 +114,7 @@ code — is in **[`docs/contributing.md`](docs/contributing.md)**. The short ver
 
 1. **Fork** this repo (or branch, if you have write access).
 2. Make your change under `src/`. Build (`build.ps1`), package (`package.ps1`), and test it in your own DOOM
-   via `installer\snaphak.exe install --local dist`.
+   via `installer\snapmap-plus.exe install --local dist`.
 3. Open a **pull request** against `main`. The CI gate runs a security scan (no new binaries · capability-surface
    scan · gitleaks), the Windows build + package, the XInput ordinal-parity check, the C unit tests
    (`tests\run-tests.ps1`), and the installer's `gofmt`/`vet`/`test`; a maintainer reviews and merges. Tagged,
@@ -151,14 +152,22 @@ describing the change instead.
 
 ## Overrides (runtime)
 
-At runtime the tool reads per-user **override decls** from `%USERPROFILE%\snaphak\overrides\` (a file-shadow
-over the engine's resource loader — e.g. to make extra editor entities placeable). Resolution is
+At runtime the tool reads per-user **override decls** from `%LOCALAPPDATA%\snapmap-plus\overrides\` (a
+file-shadow over the engine's resource loader — e.g. to make extra editor entities placeable). Resolution is
 three-layer: **your file wins**, then the tool's few built-in default decls (the "*Custom" palette tab —
 served from memory, never written to your folder; delete your file at one of those names to get the
 default back), then the game's own packaged resource. A broken override set can be bisected by setting
-the `snaphak_user_overrides` cvar to 0 (ignores your files; built-ins still serve) or renaming the
+the `sh_user_overrides` cvar to 0 (ignores your files; built-ins still serve) or renaming the
 `overrides` folder. The backend log lists your active overrides at startup. Runtime logs go to
-`<DOOM>\snaphak\logs\` (older releases used a root-level `snaphak_logs\`; install/update folds it in).
+`<DOOM>\snapmap-plus\logs\`. (Content from the original SnapHak's / older releases' `%USERPROFILE%\snaphak`
+folder is copied forward on install; a legacy root-level `snaphak_logs\` is folded in too.)
+
+## Credits
+
+Snapmap+ stands on the shoulders of **SnapHak**, the original closed-source SnapMap modding tool by
+**Chrispy**. The original pioneered the rawmap format, the override file-shadow, the hidden-entity
+unhide, and the in-editor companion window that this project reimplements clean-room — every feature
+here traces back to what that tool proved possible. Thank you, Chrispy.
 
 ## License
 

@@ -1,9 +1,9 @@
 /* iface_engine.h -- the BACKEND-hosted engine-touch bodies for the UI-interface vtable.
  *
- * The shared interface object (snaphak_iface) is backend-OWNED: the backend resolves the editor singleton
+ * The shared interface object (snapmap_plus_iface) is backend-OWNED: the backend resolves the editor singleton
  * + the selection/toast engine fns by SIGNATURE and fills the vtable's engine-touch slots (the LIGHT
  * touches the SnapStack STORE-ops need -- selection read/write, hovered id, toast, class/inherit read, id
- * validity/count/resolve). The frontend snaphakui.dll calls these through the vtable at the pinned offsets.
+ * validity/count/resolve). The frontend snapmap-plus-ui.dll calls these through the vtable at the pinned offsets.
  *
  * R1 / portability: the editor singleton is a HARDCODED data RVA (0x3056748, like cmdSystem/cvarSystem --
  * a non-unique data global, NOT sig-able); EVERY engine FUNCTION (AddToSelection/ClearSelection/Toast/
