@@ -161,7 +161,14 @@
       <a href="https://github.com/doom-snapmap/snapmap-plus">Source on GitHub</a>
       <a href="https://github.com/doom-snapmap/snapmap-plus/blob/main/LICENSE">MIT License</a>
       <a href="privacy.html">Privacy policy</a>
-      <a href="code-signing.html">Code signing policy</a>
+      <a href="#code-signing">Code signing policy</a>
+    </div>
+    <div id="code-signing">
+      <strong>Code signing policy.</strong> Free code signing provided by SignPath.io, certificate by SignPath Foundation.
+      Snapmap+'s Windows binaries — the <code>snapmap-plus.exe</code> installer and the two overlay DLLs — are
+      code-signed with a certificate held by SignPath Foundation, applied automatically in the GitHub Actions
+      release pipeline. Every release is built from source, with provenance verifiable via
+      <code>gh attestation verify --repo doom-snapmap/snapmap-plus</code>.
     </div>
     <div>
       Snapmap+ is an open-source recreation, built from our own research, of the original
