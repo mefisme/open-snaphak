@@ -16,8 +16,9 @@ dist/
 # Local Claude Code config (per-machine; not part of the public package)
 .claude/
 
-# Personal local-dev convenience script (not for upstream)
+# Personal local-dev convenience scripts (not for upstream)
 /sync-and-build-webview.ps1
+/testScript.ps1
 
 # wrangler's local cache (account metadata -- never commit)
 feedback/.wrangler/
