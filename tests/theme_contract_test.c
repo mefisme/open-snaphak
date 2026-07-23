@@ -48,6 +48,40 @@ static unsigned int count_text(const char *text, const char *needle)
     return count;
 }
 
+static const char *find_text_eol_agnostic(
+    const char *text,
+    const char *needle)
+{
+    const char *start;
+    const char *at;
+    const char *want;
+    if (!*needle) return text;
+    for (start = text; *start; start++) {
+        at = start;
+        want = needle;
+        while (*want) {
+            if (*want == '\n') {
+                if (*at == '\r') at++;
+                if (*at != '\n') break;
+            } else if (*at != *want) {
+                break;
+            }
+            at++;
+            want++;
+        }
+        if (!*want) return start;
+    }
+    return NULL;
+}
+
+static void check_eol_matcher(void)
+{
+    static const char expected[] = "alpha\nbeta";
+    CHECK(find_text_eol_agnostic("alpha\nbeta", expected) != NULL);
+    CHECK(find_text_eol_agnostic("alpha\r\nbeta", expected) != NULL);
+    CHECK(find_text_eol_agnostic("alpha\rbeta", expected) == NULL);
+}
+
 int main(int argc, char **argv)
 {
     char *html;
@@ -62,6 +96,7 @@ int main(int argc, char **argv)
     html = read_all(argv[1]);
     CHECK(html != NULL);
     if (!html) return 1;
+    check_eol_matcher();
 
     CHECK(strstr(html, "<html lang=\"en\">") != NULL);
     CHECK(strstr(html, "function applyTheme(dark, persist)") != NULL);
@@ -77,8 +112,19 @@ int main(int argc, char **argv)
     CHECK(strstr(html, "d.kind === 'configStatus'") != NULL);
     CHECK(strstr(html, "SH_CONFIG_STATUS") == NULL);
 
-    preview_read = strstr(html, "function previewThemeRead() {\n    if (!PREVIEW)");
-    preview_write = strstr(html, "function previewThemeWrite(value) {\n    if (!PREVIEW)");
+    preview_read = find_text_eol_agnostic(
+        html,
+        "function previewThemeRead() {\n"
+        "    if (!PREVIEW) return null;\n"
+        "    try { return localStorage.getItem('sh_theme'); } catch (e) { return null; }\n"
+        "  }");
+    preview_write = find_text_eol_agnostic(
+        html,
+        "function previewThemeWrite(value) {\n"
+        "    if (!PREVIEW) return;\n"
+        "    try { localStorage.setItem('sh_theme', value); }\n"
+        "    catch (e) { toast(\"Theme changed for this session, but couldn't be saved.\", 'warn'); }\n"
+        "  }");
     read_storage = strstr(html, "localStorage.getItem('sh_theme')");
     write_storage = strstr(html, "localStorage.setItem('sh_theme', value)");
     CHECK(preview_read != NULL);
